@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package tutorial.example;
+package tutorial.texture;
 
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorModel;
@@ -37,16 +37,13 @@ public class Image {
         this.width = img.getWidth();
         this.height = img.getHeight();
         this.image = img;
-        this.buffer = buff;//ByteBuffer.allocateDirect(4 * width * height);
+        this.buffer = buff;
     }
 
     public BufferedImage getImageFile(String imageFile) {
         System.out.println("read image file");
         try {
             BufferedImage img = ImageIO.read(new FileInputStream(imageFile));
-            ColorModel glAlphaColorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB), new int[]{8, 8, 8, 8}, true, false, ComponentColorModel.TRANSLUCENT, DataBuffer.TYPE_BYTE);
-            WritableRaster raster = Raster.createInterleavedRaster(DataBuffer.TYPE_BYTE, img.getWidth(), img.getHeight(), 4, null);
-            BufferedImage texImage = new BufferedImage(glAlphaColorModel, raster, true, new Hashtable());
             return img;
         } catch (Exception e) {
             e.printStackTrace();
@@ -58,7 +55,6 @@ public class Image {
         System.out.println("Made image buffer");
         try {
             int pixels[] = new int[img.getWidth() * img.getHeight()];
-
             img.getRGB(0, 0, img.getWidth(), img.getHeight(), pixels, 0, img.getWidth());
 
             ByteBuffer buffer = BufferUtils.createByteBuffer(img.getWidth() * img.getHeight() * 4);

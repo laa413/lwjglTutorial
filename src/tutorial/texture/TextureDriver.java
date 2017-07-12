@@ -9,7 +9,6 @@ import static org.lwjgl.opengl.GL11.*;
 import org.lwjgl.opengl.*;
 import org.lwjgl.*;
 import org.lwjgl.input.Keyboard;
-import tutorial.example.Image;
 
 /*
  * @author labramson
@@ -17,7 +16,8 @@ import tutorial.example.Image;
 public class TextureDriver {
 
     //IMAGE FOR THE TEXTURE
-    public static String imgLoc = "C:\\Users\\labramson\\Documents\\Tutorial\\src\\texture_tutorial\\smileTexture.jpg";
+    private static final String imgDir = "C:\\Users\\labramson\\Documents\\Tutorial\\res\\";
+    public static String imgName = "smileTexture2.jpg";
 
     //CONSTRUCTOR
     public TextureDriver() {
@@ -28,7 +28,7 @@ public class TextureDriver {
         initDisplay();
         initGL();
 
-        Image img = new Image(imgLoc);
+        Image img = new Image(imgDir + "" + imgName);
         Texture texture = new Texture(GL_TEXTURE_2D, GL11.glGenTextures());
 
         //OBJECT USED TO MAKE THE TEXTURE
@@ -51,13 +51,13 @@ public class TextureDriver {
             glVertex2i(100, 100); //upper left
 
             glTexCoord2f(0, 1);
-            glVertex2i(200, 100); //upper right
+            glVertex2i(100, 200); //upper right
 
             glTexCoord2f(1, 1);
             glVertex2i(200, 200); //bottom right
 
             glTexCoord2f(1, 0);
-            glVertex2i(100, 200); //bottom left
+            glVertex2i(200, 100); //bottom left
             glEnd();
 
             //IF ESC THEN CLOSE
