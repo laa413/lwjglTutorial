@@ -5,6 +5,7 @@
  */
 package tutorial.clTexture;
 
+import java.nio.FloatBuffer;
 import static org.lwjgl.opengl.GL11.*;
 import org.lwjgl.opengl.*;
 import org.lwjgl.*;
@@ -17,7 +18,7 @@ public class TextureDriver {
 
     //IMAGE FOR THE TEXTURE
     private static final String imgDir = "C:\\Users\\labramson\\Documents\\Tutorial\\res\\";
-    public static String imgName = "smileTexture2.jpg";
+    public static String imgName = "texture.png";
 
     //CONSTRUCTOR
     public TextureDriver() {}
@@ -31,20 +32,39 @@ public class TextureDriver {
 
         //OBJECT USED TO MAKE THE TEXTURE
         TextureMaker tex = new TextureMaker(img.getImg(), texture);
-        texture = tex.makeTexture();
-        tex.makeCLTexture();
+        texture = tex.setupTexture();
+        tex.makeCLTexture(texture);
+
+        float[] vertices = new float[]{
+            -0.5f, 0.5f,
+            0.5f, 0.5f,
+            0.5f, -0.5f,
+            0.5f, -0.5f,
+            -0.5f, -0.5f,
+            -0.5f, 0.5f,
+        };
+
+        float[] texCoords = new float[]{
+            0, 0,
+            1, 0,
+            1, 1,
+            1, 1,
+            0, 1,
+            0, 0
+        };
+
+        //ObjectModel objModel = new ObjectModel(vertices, texCoords);
 
         while (!Display.isCloseRequested()) {
             //CLEARS SCREEN EACH LOOP
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            //ENABLES GL_TEXTURE_2D
+           //ENABLES GL_TEXTURE_2D
             glEnable(GL_TEXTURE_2D);
-
             //BIND THE TEXTURE
             texture.bind();
-
             glPixelStorei(GL_PACK_ALIGNMENT, 4);
-            
+
+            //objModel.renderVBO();
             //DRAW A SQUARE WITH MAPPED TEXTURE
             glBegin(GL_QUADS);
             glTexCoord2f(0, 0);
@@ -59,7 +79,6 @@ public class TextureDriver {
             glTexCoord2f(1, 0);
             glVertex2i(200, 100); //bottom left
             glEnd();
-
             //IF ESC THEN CLOSE
             if (Keyboard.isKeyDown(Keyboard.KEY_ESCAPE)) {
                 Display.destroy();
@@ -91,5 +110,11 @@ public class TextureDriver {
         glLoadIdentity();
         glOrtho(0, 300, 300, 0, 1, -1);
         glMatrixMode(GL_MODELVIEW);
+    }
+
+    static FloatBuffer toFloatBuffer(float[] floats) {
+        FloatBuffer buf = BufferUtils.createFloatBuffer(floats.length).put(floats);
+        buf.rewind();
+        return buf;
     }
 }
