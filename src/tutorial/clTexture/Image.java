@@ -6,17 +6,9 @@
 package tutorial.clTexture;
 
 import java.awt.image.BufferedImage;
-import java.awt.image.ColorModel;
-import java.awt.image.ComponentColorModel;
-import java.awt.image.WritableRaster;
-import java.awt.image.Raster;
-import java.awt.image.DataBuffer;
-import java.awt.color.ColorSpace;
 import java.io.FileInputStream;
 import java.nio.ByteBuffer;
 import javax.imageio.ImageIO;
-import java.util.HashMap;
-import java.util.Hashtable;
 
 import org.lwjgl.BufferUtils;
 

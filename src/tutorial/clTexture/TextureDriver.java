@@ -20,9 +20,7 @@ public class TextureDriver {
     public static String imgName = "smileTexture2.jpg";
 
     //CONSTRUCTOR
-    public TextureDriver() {
-
-    }
+    public TextureDriver() {}
 
     public static void main(String... args) throws Exception {
         initDisplay();
@@ -74,7 +72,6 @@ public class TextureDriver {
         }
 
         //DESTROYS THE DISPLAY
-        
         Display.destroy();
     }
 

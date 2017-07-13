@@ -25,8 +25,6 @@ import java.util.List;
 //GL imports
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL20;
-import org.lwjgl.opengl.GL30;
 import static org.lwjgl.opengl.GL11.GL_LINEAR;
 import static org.lwjgl.opengl.GL11.GL_RGB;
 import static org.lwjgl.opengl.GL11.GL_RGB8;
@@ -184,13 +182,16 @@ public class TextureMaker {
 
             // Create an command queue using our OpenCL context and the first device in our list of devices
             CLCommandQueue queue = CL10.clCreateCommandQueue(context, devices.get(0), CL10.CL_QUEUE_PROFILING_ENABLE, null);
+            System.out.println("Command Queue created");
             
-            CLMem clglMem = createSharedMem(context, texture); 
+            //CLMem clglMem = createSharedMem(context, texture); 
             //CLMem gltoCLTex = CL10GL.clCreateFromGLTexture(context, CL_MEM_READ_WRITE, GL_TEXTURE_BUFFER, 0,texture, errcode_ret);
-            System.out.println("Shared mem created");
             
             // use the shared memory in CL
-            useSharedMem(clglMem, queue);
+            //useSharedMem(clglMem, queue);
+            //System.out.println("Shared Mem used");
+            
+            
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("*** Problem initializing OpenCL");
@@ -234,11 +235,14 @@ public class TextureMaker {
         // sent to the queue have completed before the program continues. 
         CL10.clFinish(queue);
         deleteSharedMem(clmem);
-        System.out.println("Finished using CL & released shared mem");
+        //System.out.println("Finished using CL & released shared mem");
     }
     
     public void deleteSharedMem(CLMem clmem){
         // Delete/release an OpenCL shared memory object
         CL10.clReleaseMemObject(clmem);
+    }
+    
+    public void textureViaGLTex(){
     }
 }
