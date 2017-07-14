@@ -18,7 +18,7 @@ public class TextureDriver {
 
     //IMAGE FOR THE TEXTURE
     private static final String imgDir = "C:\\Users\\labramson\\Documents\\Tutorial\\res\\";
-    public static String imgName = "texture.png";
+    public static String imgName = "smileTexture2.jpg";
 
     //CONSTRUCTOR
     public TextureDriver() {}
@@ -30,7 +30,7 @@ public class TextureDriver {
         Image img = new Image(imgDir + "" + imgName);
         Texture texture = new Texture(GL_TEXTURE_2D, GL11.glGenTextures());
 
-        //OBJECT USED TO MAKE THE TEXTURE
+        //OBJECT USED TO MAKE THE TEXTURE; GETS THE IMAGE AND INIT TEXTURE
         TextureMaker tex = new TextureMaker(img.getImg(), texture);
         texture = tex.setupTexture();
         tex.makeCLTexture(texture);
@@ -53,8 +53,6 @@ public class TextureDriver {
             0, 0
         };
 
-        //ObjectModel objModel = new ObjectModel(vertices, texCoords);
-
         while (!Display.isCloseRequested()) {
             //CLEARS SCREEN EACH LOOP
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -64,7 +62,6 @@ public class TextureDriver {
             texture.bind();
             glPixelStorei(GL_PACK_ALIGNMENT, 4);
 
-            //objModel.renderVBO();
             //DRAW A SQUARE WITH MAPPED TEXTURE
             glBegin(GL_QUADS);
             glTexCoord2f(0, 0);
@@ -79,6 +76,7 @@ public class TextureDriver {
             glTexCoord2f(1, 0);
             glVertex2i(200, 100); //bottom left
             glEnd();
+            
             //IF ESC THEN CLOSE
             if (Keyboard.isKeyDown(Keyboard.KEY_ESCAPE)) {
                 Display.destroy();

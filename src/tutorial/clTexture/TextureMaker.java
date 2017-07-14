@@ -90,6 +90,24 @@ public class TextureMaker {
     static final String source
             = "kernel void sum(global const float *a, global const float *b, global float *answer)"
             + "{ unsigned int xid = get_global_id(0);  answer[xid] = a[xid] + b[xid];}";
+    static final String code = "kernel void readImg (BufferedImage img)"
+            + "{ for (int x = 0; x < image.getWidth(); x++) {\n"
+            + "            for (int y = 0; y < image.getHeight(); y++) {\n"
+            + "                final int clr = image.getRGB(x, y);\n"
+            + "                final int red = (clr & 0x00ff0000) >> 16;\n"
+            + "                final int green = (clr & 0x0000ff00) >> 8;\n"
+            + "                final int blue = clr & 0x000000ff;\n"
+            + "\n"
+            + "                // Color Red get cordinates\n"
+            + "                if (red == 255) {\n"
+            + "                    System.out.println(String.format(\"Coordinate %d %d\", x, y));\n"
+            + "                } else {\n"
+            + "                    System.out.println(\"Red Color value = \" + red);\n"
+            + "                    System.out.println(\"Green Color value = \" + green);\n"
+            + "                    System.out.println(\"Blue Color value = \" + blue);\n"
+            + "                }\n"
+            + "            }\n"
+            + "        }}";
 
     //buffers for input and output
     static final FloatBuffer a = toFloatBuffer(new float[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
@@ -114,32 +132,37 @@ public class TextureMaker {
                 DataBuffer.TYPE_BYTE);
     }
 
+    /*BINDS THE IMAGE TO THE TEXTURE
+        RETURNS THE TEXTURE
+    */
     public Texture setupTexture() {
-        int textureID = this.texture.textureID;
-        int textureTarget = this.texture.target;
-        Texture texture = new Texture(textureTarget, textureID);
         int srcPixelFormat = 0;
+        
         // bind this texture 
-        GL11.glBindTexture(textureTarget, textureID);
-
+        GL11.glBindTexture(this.texture.target, this.texture.textureID);
+        
+        //GETS THE IMAGE & SETS WIDTH/HEIGHT OF IMAGE TO THAT OF TEXTURE
         BufferedImage bufferedImage = this.image;
-        texture.setWidth(bufferedImage.getWidth());
-        texture.setHeight(bufferedImage.getHeight());
+        this.texture.setWidth(bufferedImage.getWidth());
+        this.texture.setHeight(bufferedImage.getHeight());
 
+        //GETS COLOR MODEL OF THE IMAGE
         if (bufferedImage.getColorModel().hasAlpha()) {
             srcPixelFormat = GL11.GL_RGBA;
         } else {
             srcPixelFormat = GL11.GL_RGB;
         }
 
+        //CONVERTES THE BufferedImage TO a ByteBuffer for the texture
         ByteBuffer texBuff = imgToTexBuff(bufferedImage, texture);
         textureBuff = texBuff;
+        
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, bufferedImage.getWidth(), bufferedImage.getHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, (ByteBuffer)texBuff);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, bufferedImage.getWidth()+1, bufferedImage.getHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, (ByteBuffer) texBuff);
 
         return texture;
     }
@@ -149,36 +172,25 @@ public class TextureMaker {
         WritableRaster raster;
         BufferedImage texImage;
 
-        int texWidth = 2;
-        int texHeight = 2;
-
-        // find the closest power of 2 for the width and height of the produced texture
-        while (texWidth < bufferedImage.getWidth()) {
-            texWidth *= 2;
-        }
-        while (texHeight < bufferedImage.getHeight()) {
-            texHeight *= 2;
-        }
-
-        texture.setTextureHeight(texHeight);
-        texture.setTextureWidth(texWidth);
+        texture.setTextureHeight(bufferedImage.getHeight());
+        texture.setTextureWidth(bufferedImage.getWidth());
 
         // create a raster that can be used by OpenGL as a source for a texture
         if (bufferedImage.getColorModel().hasAlpha()) {
-            raster = Raster.createInterleavedRaster(DataBuffer.TYPE_BYTE, texWidth, texHeight, 4, null);
+            raster = Raster.createInterleavedRaster(DataBuffer.TYPE_BYTE, bufferedImage.getWidth()+1, bufferedImage.getHeight(), 4, null);
             texImage = new BufferedImage(glAlphaColorModel, raster, false, new Hashtable());
         } else {
-            raster = Raster.createInterleavedRaster(DataBuffer.TYPE_BYTE, texWidth, texHeight, 3, null);
+            raster = Raster.createInterleavedRaster(DataBuffer.TYPE_BYTE, bufferedImage.getWidth()+1, bufferedImage.getHeight(), 3, null);
             texImage = new BufferedImage(glColorModel, raster, false, new Hashtable());
         }
 
         // copy the source image into the produced image
         Graphics g = texImage.getGraphics();
         g.setColor(new Color(0f, 0f, 0f, 0f));
-        g.fillRect(0, 0, texWidth, texHeight);
+        g.fillRect(0, 0, bufferedImage.getWidth()+1, bufferedImage.getHeight());
         g.drawImage(bufferedImage, 0, 0, null);
 
-        // build a byte buffer from the temporary image used by OpenGL to produce a texture
+        // build a byte buffer from the temporary image to produce a texture
         byte[] data = ((DataBufferByte) texImage.getRaster().getDataBuffer()).getData();
 
         imageBuffer = ByteBuffer.allocateDirect(data.length);
@@ -191,10 +203,27 @@ public class TextureMaker {
 
     public void makeCLTexture(Texture texture) {
         try {
+            CLContext context = createCLContext();
+
+            // Create an command queue using our OpenCL context and the first device in our list of devices
+            CLCommandQueue queue = CL10.clCreateCommandQueue(context, context.getInfoDevices().get(0), CL10.CL_QUEUE_PROFILING_ENABLE, null);
+            System.out.println("Command Queue created");
+
+            CLMem mem = CL12GL.clCreateFromGLTexture(context, CL10.CL_MEM_WRITE_ONLY, GL_TEXTURE_2D, 0, texture.textureID, null);
+            GL11.glFinish();
+
+            kernelFunction(context, queue);
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("*** Problem initializing OpenCL");
+        }
+    }
+
+    private CLContext createCLContext(){
+         try {
             // Initialize OpenCL and create a context and command queue
             CL.create();
-            System.out.println("\n****************");
-            System.out.println("CL created");
+            System.out.println("\nCL created");
 
             // Drawable context that OpenCL needs
             Drawable drawable = Display.getDrawable();
@@ -212,16 +241,20 @@ public class TextureMaker {
             CLContext context = CLContext.create(platform, devices, null, drawable, null);
             System.out.println("Context created");
 
-            // Create an command queue using our OpenCL context and the first device in our list of devices
-            CLCommandQueue queue = CL10.clCreateCommandQueue(context, devices.get(0), CL10.CL_QUEUE_PROFILING_ENABLE, null);
-            System.out.println("Command Queue created");
+            return context;
 
-            CLMem mem = CL12GL.clCreateFromGLTexture(context, CL10.CL_MEM_WRITE_ONLY, GL_TEXTURE_2D, 0, texture.textureID, null);
-            GL11.glFinish();
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("*** Problem initializing OpenCL");
+            return null;
+        }
+    }
+    
+    private void kernelFunction(CLContext context, CLCommandQueue queue){
+        //BELOW IS CODE TO TRY TO WORK WITH A KERNEL; KERNEL WILL NEED TO STUFF WITH TEXTURE
+            //THIS CODE IS FROM MY HelloWorld.java;
+            //needs to be passed the texture
             
-            //BELOW IS CODE TO TRY TO WORK WITH A KERNEL; KERNEL WILL NEED TO STUFF WITH TEXTURE
-            //THIS CODE IS FROM MY HelloWorld.java
-
             //Allocates memory for input buffers
             CLMem aMem = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, a, null);
             clEnqueueWriteBuffer(queue, aMem, 1, 0, a, null, null);
@@ -236,7 +269,7 @@ public class TextureMaker {
             //Creates the program using context & source
             CLProgram program = clCreateProgramWithSource(context, source, null);
             //Checks if there was an error in creation
-            Util.checkCLError(clBuildProgram(program, devices.get(0), "", null));
+            Util.checkCLError(clBuildProgram(program, context.getInfoDevices().get(0), "", null));
 
             //Creates the kernel; function name passed in must match kernel method in OCL source
             //sum method is defined in String source used in creating the program
@@ -255,68 +288,56 @@ public class TextureMaker {
             //Read results from memory back into buffer
             clEnqueueReadBuffer(queue, answerMem, 1, 0, answer, null, null);
             clFinish(queue);
-            
-            System.out.print(a);
-         System.out.println("+");
-         System.out.print(b);
-         System.out.println("=");
-        System.out.print(answer);
 
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.out.println("*** Problem initializing OpenCL");
-        }
+//            System.out.print(a);
+//            System.out.println("+");
+//            System.out.print(b);
+//            System.out.println("=");
+//            System.out.print(answer);
+
+            //END OF KERNEL WORK; PRINTS OUT ANSWER FROM FLOAT BUFFER WITH ANSWER
     }
-
-    public CLMem createSharedMem(CLContext context, Texture texture) {
-        // Create an OpenGL buffer
-        int glBufId = GL15.glGenBuffers();
-        // Load the buffer with data using glBufferData();
-        // initialize buffer object
-
-        GL15.glBindBuffer(GL_ARRAY_BUFFER, glBufId);
-
-        //int size = (texture.getImageHeight() * texture.getImageWidth() * 4);
-        GL15.glBufferData(GL_ARRAY_BUFFER, textureBuff, GL_DYNAMIC_DRAW);
-        // Create the shared OpenCL memory object from the OpenGL buffer
-        CLMem glMem = CL10GL.clCreateFromGLBuffer(context, CL10.CL_MEM_READ_WRITE, glBufId, null);
-
-        return glMem;
-    }
-
-    public void useSharedMem(CLMem clmem, CLCommandQueue queue) {
-        System.out.println("Acquiring mem lock");
-        // Acquire the lock for the 'glMem' memory object
-        int error = CL10GL.clEnqueueAcquireGLObjects(queue, clmem, null, null);
-        // Remember to check for errors
-        if (error != CL10.CL_SUCCESS) {
-            Util.checkCLError(error);
-        }
-
-        // Now execute an OpenCL command using the shared memory object,
-        // such as uploading data to the memory object using 'CL10.clEnqueueWriteBuffer()'
-        // or running a kernel using 'CL10.clEnqueueNDRangeKernel()' with the correct parameters
-        // ...
-        System.out.println("Doing Stuff");
-        // Release the lock on the 'glMem' memory object
-        error = CL10GL.clEnqueueReleaseGLObjects(queue, clmem, null, null);
-        if (error != CL10.CL_SUCCESS) {
-            Util.checkCLError(error);
-        }
-
-        // Remember to flush the command queue when you are done. 
-        // Flushing the queue ensures that all of the OpenCL commands
-        // sent to the queue have completed before the program continues. 
-        CL10.clFinish(queue);
-        deleteSharedMem(clmem);
-        //System.out.println("Finished using CL & released shared mem");
-    }
-
-    public void deleteSharedMem(CLMem clmem) {
-        // Delete/release an OpenCL shared memory object
-        CL10.clReleaseMemObject(clmem);
-    }
-
-    public void textureViaGLTex() {
-    }
+    
+//    public CLMem createSharedMem(CLContext context, Texture texture) {
+//        // Create an OpenGL buffer
+//        int glBufId = GL15.glGenBuffers();
+//        // Load the buffer with data using glBufferData();
+//        // initialize buffer object
+//
+//        GL15.glBindBuffer(GL_ARRAY_BUFFER, glBufId);
+//
+//        //int size = (texture.getImageHeight() * texture.getImageWidth() * 4);
+//        GL15.glBufferData(GL_ARRAY_BUFFER, textureBuff, GL_DYNAMIC_DRAW);
+//        // Create the shared OpenCL memory object from the OpenGL buffer
+//        CLMem glMem = CL10GL.clCreateFromGLBuffer(context, CL10.CL_MEM_READ_WRITE, glBufId, null);
+//
+//        return glMem;
+//    }
+//
+//    public void useSharedMem(CLMem clmem, CLCommandQueue queue) {
+//        System.out.println("Acquiring mem lock");
+//        // Acquire the lock for the 'glMem' memory object
+//        int error = CL10GL.clEnqueueAcquireGLObjects(queue, clmem, null, null);
+//        // Remember to check for errors
+//        if (error != CL10.CL_SUCCESS) {
+//            Util.checkCLError(error);
+//        }
+//
+//        // Now execute an OpenCL command using the shared memory object,
+//        // such as uploading data to the memory object using 'CL10.clEnqueueWriteBuffer()'
+//        // or running a kernel using 'CL10.clEnqueueNDRangeKernel()' with the correct parameters
+//        // ...
+//        System.out.println("Doing Stuff");
+//        // Release the lock on the 'glMem' memory object
+//        error = CL10GL.clEnqueueReleaseGLObjects(queue, clmem, null, null);
+//        if (error != CL10.CL_SUCCESS) {
+//            Util.checkCLError(error);
+//        }
+//
+//        // Remember to flush the command queue when you are done. 
+//        // Flushing the queue ensures that all of the OpenCL commands
+//        // sent to the queue have completed before the program continues. 
+//        CL10.clFinish(queue);
+//        //System.out.println("Finished using CL & released shared mem");
+//    }
 }

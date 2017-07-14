@@ -1,0 +1,42 @@
+//    public CLMem createSharedMem(CLContext context, Texture texture) {
+//        // Create an OpenGL buffer
+//        int glBufId = GL15.glGenBuffers();
+//        // Load the buffer with data using glBufferData();
+//        // initialize buffer object
+//
+//        GL15.glBindBuffer(GL_ARRAY_BUFFER, glBufId);
+//
+//        //int size = (texture.getImageHeight() * texture.getImageWidth() * 4);
+//        GL15.glBufferData(GL_ARRAY_BUFFER, textureBuff, GL_DYNAMIC_DRAW);
+//        // Create the shared OpenCL memory object from the OpenGL buffer
+//        CLMem glMem = CL10GL.clCreateFromGLBuffer(context, CL10.CL_MEM_READ_WRITE, glBufId, null);
+//
+//        return glMem;
+//    }
+//
+//    public void useSharedMem(CLMem clmem, CLCommandQueue queue) {
+//        System.out.println("Acquiring mem lock");
+//        // Acquire the lock for the 'glMem' memory object
+//        int error = CL10GL.clEnqueueAcquireGLObjects(queue, clmem, null, null);
+//        // Remember to check for errors
+//        if (error != CL10.CL_SUCCESS) {
+//            Util.checkCLError(error);
+//        }
+//
+//        // Now execute an OpenCL command using the shared memory object,
+//        // such as uploading data to the memory object using 'CL10.clEnqueueWriteBuffer()'
+//        // or running a kernel using 'CL10.clEnqueueNDRangeKernel()' with the correct parameters
+//        // ...
+//        System.out.println("Doing Stuff");
+//        // Release the lock on the 'glMem' memory object
+//        error = CL10GL.clEnqueueReleaseGLObjects(queue, clmem, null, null);
+//        if (error != CL10.CL_SUCCESS) {
+//            Util.checkCLError(error);
+//        }
+//
+//        // Remember to flush the command queue when you are done. 
+//        // Flushing the queue ensures that all of the OpenCL commands
+//        // sent to the queue have completed before the program continues. 
+//        CL10.clFinish(queue);
+//        //System.out.println("Finished using CL & released shared mem");
+//    }

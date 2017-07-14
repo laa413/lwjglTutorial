@@ -40,11 +40,11 @@ public class Texture {
     }
 
     public float getWidth() {
-        return widthRatio;
+        return width;
     }
 
     public float getHeight() {
-        return heightRatio;
+        return height;
     }
 
     public void setTextureWidth(int texWidth) {
