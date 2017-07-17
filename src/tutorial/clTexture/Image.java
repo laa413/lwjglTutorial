@@ -20,6 +20,7 @@ import javax.imageio.ImageIO;
  * @author LAA
  */
 public class Image {
+
     private final int width, height;
     private BufferedImage img;
 
@@ -48,6 +49,7 @@ public class Image {
     }
 
     private BufferedImage getBuffImage(String imageFile) {
+        System.out.println("Fetching image file");
         try {
             BufferedImage img = ImageIO.read(new FileInputStream(imageFile));
             return img;
@@ -61,6 +63,8 @@ public class Image {
         ByteBuffer byteBuffer;
         WritableRaster raster;
         BufferedImage texImage;
+
+        System.out.println("Making image byte buffer");
 
         // create a raster that can be used by OpenGL as a source for a texture
         if (this.img.getColorModel().hasAlpha()) {
@@ -87,16 +91,16 @@ public class Image {
 
         return byteBuffer;
     }
-    
-    public int getWidth(){
+
+    public int getWidth() {
         return width;
     }
-    
-    public int getHeight(){
+
+    public int getHeight() {
         return height;
     }
-    
-    public BufferedImage getImg(){
+
+    public BufferedImage getImg() {
         return img;
     }
 }

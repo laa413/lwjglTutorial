@@ -41,7 +41,7 @@ public class Main {
             glEnable(GL_TEXTURE_2D);
             //BIND THE TEXTURE
             texture.bind();
-            glPixelStorei(GL_PACK_ALIGNMENT, 4);
+            glPixelStorei(GL_PACK_ALIGNMENT, 4); 
 
             //DRAW A SQUARE WITH MAPPED TEXTURE
             glBegin(GL_QUADS);
