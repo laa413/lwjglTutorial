@@ -14,44 +14,25 @@ import org.lwjgl.input.Keyboard;
 /*
  * @author labramson
  */
-public class TextureDriver {
+public class Main {
 
     //IMAGE FOR THE TEXTURE
     private static final String imgDir = "C:\\Users\\labramson\\Documents\\Tutorial\\res\\";
     public static String imgName = "smileTexture2.jpg";
 
     //CONSTRUCTOR
-    public TextureDriver() {}
+    public Main() {}
 
     public static void main(String... args) throws Exception {
         initDisplay();
         initGL();
 
+        //GET THE IMAGE AND GREATE THE GL TEXTURE
         Image img = new Image(imgDir + "" + imgName);
-        Texture texture = new Texture(GL_TEXTURE_2D, GL11.glGenTextures());
-
-        //OBJECT USED TO MAKE THE TEXTURE; GETS THE IMAGE AND INIT TEXTURE
-        TextureMaker tex = new TextureMaker(img.getImg(), texture);
-        texture = tex.setupTexture();
-        tex.makeCLTexture(texture);
-
-        float[] vertices = new float[]{
-            -0.5f, 0.5f,
-            0.5f, 0.5f,
-            0.5f, -0.5f,
-            0.5f, -0.5f,
-            -0.5f, -0.5f,
-            -0.5f, 0.5f,
-        };
-
-        float[] texCoords = new float[]{
-            0, 0,
-            1, 0,
-            1, 1,
-            1, 1,
-            0, 1,
-            0, 0
-        };
+        Texture texture = new Texture(img, GL_TEXTURE_2D, GL11.glGenTextures());
+        
+        //CONVERT GL TEXTURE TO CL TEXTURE
+        texture.convertToCL();
 
         while (!Display.isCloseRequested()) {
             //CLEARS SCREEN EACH LOOP

@@ -69,7 +69,7 @@ import org.lwjgl.opencl.CLMem;
 import org.lwjgl.opencl.CLKernel;
 import org.lwjgl.opencl.CLProgram;
 import org.lwjgl.opencl.Util;
-import static tutorial.clTexture.TextureDriver.toFloatBuffer;
+import static tutorial.clTexture.Main.toFloatBuffer;
 
 /*
  * @author labramson
@@ -85,7 +85,6 @@ public class TextureMaker {
 
     private Texture texture;
     private BufferedImage image;
-    private ByteBuffer textureBuff;
 
     static final String source
             = "kernel void sum(global const float *a, global const float *b, global float *answer)"
@@ -155,7 +154,6 @@ public class TextureMaker {
 
         //CONVERTES THE BufferedImage TO a ByteBuffer for the texture
         ByteBuffer texBuff = imgToTexBuff(bufferedImage, texture);
-        textureBuff = texBuff;
         
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -172,8 +170,8 @@ public class TextureMaker {
         WritableRaster raster;
         BufferedImage texImage;
 
-        texture.setTextureHeight(bufferedImage.getHeight());
-        texture.setTextureWidth(bufferedImage.getWidth());
+        //texture.setTextureHeight(bufferedImage.getHeight());
+        //texture.setTextureWidth(bufferedImage.getWidth());
 
         // create a raster that can be used by OpenGL as a source for a texture
         if (bufferedImage.getColorModel().hasAlpha()) {
