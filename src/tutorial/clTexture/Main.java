@@ -5,19 +5,13 @@
  */
 package tutorial.clTexture;
 
-import static java.lang.Math.min;
 import java.nio.IntBuffer;
 import java.util.List;
-import static org.lwjgl.opengl.GL11.*;
-import org.lwjgl.opengl.*;
 import org.lwjgl.*;
 import org.lwjgl.input.Keyboard;
-import org.lwjgl.opencl.CL;
 import org.lwjgl.opencl.CL10;
-import static org.lwjgl.opencl.CL10.CL_PROGRAM_BUILD_LOG;
-import static org.lwjgl.opencl.CL10.CL_QUEUE_PROFILING_ENABLE;
-import static org.lwjgl.opencl.CL10.clReleaseMemObject;
 import org.lwjgl.opencl.CL10GL;
+import org.lwjgl.opencl.CL;
 import org.lwjgl.opencl.CLCapabilities;
 import org.lwjgl.opencl.CLCommandQueue;
 import org.lwjgl.opencl.CLContext;
@@ -29,23 +23,39 @@ import org.lwjgl.opencl.CLMem;
 import org.lwjgl.opencl.CLPlatform;
 import org.lwjgl.opencl.CLProgram;
 import org.lwjgl.opencl.api.Filter;
+import org.lwjgl.opengl.*;
+import static java.lang.Math.min;
+import static org.lwjgl.opencl.CL10.CL_PROGRAM_BUILD_LOG;
+import static org.lwjgl.opencl.CL10.CL_QUEUE_PROFILING_ENABLE;
+import static org.lwjgl.opencl.CL10.clEnqueueNDRangeKernel;
+import static org.lwjgl.opencl.CL10.clEnqueueWaitForEvents;
+import static org.lwjgl.opencl.CL10.clFinish;
+import static org.lwjgl.opencl.CL10.clReleaseMemObject;
+import static org.lwjgl.opencl.CL10GL.clEnqueueAcquireGLObjects;
+import static org.lwjgl.opencl.KHRGLEvent.clCreateEventFromGLsyncKHR;
+import static org.lwjgl.opengl.ARBCLEvent.glCreateSyncFromCLeventARB;
+import static org.lwjgl.opengl.ARBSync.GL_SYNC_GPU_COMMANDS_COMPLETE;
+import static org.lwjgl.opengl.ARBSync.glFenceSync;
+import static org.lwjgl.opengl.ARBSync.glWaitSync;
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL15.glBindBuffer;
 import static org.lwjgl.opengl.GL15.glDeleteBuffers;
+import static org.lwjgl.opengl.GL21.GL_PIXEL_UNPACK_BUFFER;
 
 /*
  * @author labramson
  */
 public class Main {
 
-    private Image img;
+    public static Image img;
 
     static final String kernel
-            = "kernel void imgTest(read_only image2d_t srcImage, write_only image2d_t finalImage){\n"
-            + "    sampler_t sampler = CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP | CLK_FILTER_NEAREST;\n"
-            + "    uint offset = get_global_id(1) * 0x4000 + get_global_id(0)*0x1000;\n"
-            + "    int2 coord = (int2)(get_global_id(0), get_global_id(1));\n"
-            + "    uint4 pixel = read_imageui(srcImage, sampler, coord);\n"
-            + "    pixel.x -= offset;\n"
-            + "    write_imageui(finalImage, coord, pixel);\n"
+            = "kernel void imgTest(__read_only image2d_t inputTexture){\n"
+            + "    int2 imgCoords = (int2)(get_global_id(0), get_global_id(1));\n"
+            + "    //printf(\"Coord x:%d Coord y:%d \", imgCoords.x, imgCoords.y);\n\n"
+            + "    const sampler_t smp =  CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;\n\n"
+            + "    float4 imgVal = read_imagef(inputTexture, smp, imgCoords); \n"
+            + "    printf(\"(%d, %d) RGBA(%f, %f, %f, %f)\\n\", imgCoords.x, imgCoords.y, imgVal.x, imgVal.y, imgVal.z, imgVal.w);\n"
             + "}";
 
     //VARS FOR CL CONVERSION
@@ -56,7 +66,7 @@ public class Main {
     private CLProgram[] programs;  //array of cl programs for 
     private CLMem[] glBuffers;  //array of clm for 
     private IntBuffer glIDs;  //int buffer for 
-    private boolean useTextures;  //for something...
+    private boolean useTextures = true;  //for something...
     private final PointerBuffer kernel2DGlobalWorkSize = BufferUtils.createPointerBuffer(2);  //the global work size of the kernel
     private int slices;  //dividing up the image for faster processing
     private boolean drawSeparator;  //no idea what this is
@@ -74,8 +84,7 @@ public class Main {
     private int deviceType = CL10.CL_DEVICE_TYPE_GPU;
 
     //CONSTRUCTOR
-    public Main() {
-    }
+    public Main() {}
 
     public static void main(String... args) throws Exception {
         //IMAGE FOR THE TEXTURE
@@ -86,33 +95,24 @@ public class Main {
 
         initDisplay();
         initGL();
+        
+        //Program object used to run functions
+        Main run = new Main();
 
         //init
-        Main run = new Main();
         run.initCL();
         run.initGLTexture(img);
-
-        //CLMem mem = run.createTexture(texture);
-        //CONVERT GL TEXTURE TO CL TEXTURE
+        glFinish();
+        run.setKernelParams();
+        
+        //Display Loop
         while (!Display.isCloseRequested()) {
+            run.display(img);
+            
             //SETS GL SETTINGS
             glSettings();
 
-            //DRAW A SQUARE WITH MAPPED TEXTURE
-            glBegin(GL_QUADS);
-            glTexCoord2f(0, 0);
-            glVertex2i(100, 100); //upper left
-
-            glTexCoord2f(0, 1);
-            glVertex2i(100, 200); //upper right
-
-            glTexCoord2f(1, 1);
-            glVertex2i(200, 200); //bottom right
-
-            glTexCoord2f(1, 0);
-            glVertex2i(200, 100); //bottom left
-            glEnd();
-
+            
             //IF ESC THEN CLOSE
             if (Keyboard.isKeyDown(Keyboard.KEY_ESCAPE)) {
                 Display.destroy();
@@ -235,9 +235,22 @@ public class Main {
 
             //CHECK SYNC STATUS BTWN GL & CL
             syncStatus(context);
+            
+            //DRAW A SQUARE WITH MAPPED TEXTURE
+            glBegin(GL_QUADS);
+            glTexCoord2f(0, 0);
+            glVertex2i(100, 100); //upper left
 
-            //CLMem mem = CL10GL.clCreateFromGLTexture2D(context, CL10.CL_MEM_READ_ONLY, target, 0, id, null);
-            //CLMem mem2 = CL10GL.clCreateFromGLTexture2D(context, CL10.CL_MEM_WRITE_ONLY, target, 0, id, null);
+            glTexCoord2f(0, 1);
+            glVertex2i(100, 200); //upper right
+
+            glTexCoord2f(1, 1);
+            glVertex2i(200, 200); //bottom right
+
+            glTexCoord2f(1, 0);
+            glVertex2i(200, 100); //bottom left
+            glEnd();
+
         } catch (Exception e) {
             System.out.println("*** Problem creating CL texture");
             e.printStackTrace();
@@ -283,7 +296,7 @@ public class Main {
 
     private void fillQueue(CLContext context) {
         for (int i = 0; i < slices; i++) {
-            // create command queue and upload color map buffer on each used device
+            // create command queue on each used device
             queues[i] = CL10.clCreateCommandQueue(context, context.getInfoDevices().get(i), CL_QUEUE_PROFILING_ENABLE, null);
             queues[i].checkValid();
         }
@@ -293,6 +306,13 @@ public class Main {
         // init kernel with constants
         for (int i = 0; i < kernels.length; i++) {
             kernels[i] = CL10.clCreateKernel(programs[min(i, programs.length)], "imgTest", null);
+        }
+    }
+
+    private void setKernelParams() {
+        for (int i = 0; i < slices; i++) {
+            kernels[i]
+                    .setArg(0, glBuffers[i]);
         }
     }
 
@@ -323,6 +343,91 @@ public class Main {
             System.out.println("CL to GL sync: Using OpenGL sync objects");
         } else {
             System.out.println("CL to GL sync: Using glFinish");
+        }
+    }
+    
+    public void display(Image img){
+         if (syncCLtoGL && glEvent != null) {
+            for (final CLCommandQueue queue : queues) {
+                clEnqueueWaitForEvents(queue, glEvent);
+            }
+        } else {
+            glFinish();
+        }
+
+        if (!buffersInitialized) {
+            initGLTexture(img);
+            setKernelParams();
+        }
+
+        if (rebuild) {
+            buildProgram(context);
+            setKernelParams();
+        }
+
+        kernel2DGlobalWorkSize.put(0, img.getWidth()).put(1, img.getHeight());
+
+        for (int i = 0; i < slices; i++) {
+        // acquire GL objects, and enqueue a kernel with a probe from the list
+            clEnqueueAcquireGLObjects(queues[i], glBuffers[i], null, null);
+
+            clEnqueueNDRangeKernel(queues[i], kernels[i], 2,
+                    null,
+                    kernel2DGlobalWorkSize,
+                    null,
+                    null, null);
+
+            CL10GL.clEnqueueReleaseGLObjects(queues[i], glBuffers[i], null, syncGLtoCL ? syncBuffer : null);
+            if (syncGLtoCL) {
+                clEvents[i] = queues[i].getCLEvent(syncBuffer.get(0));
+                clSyncs[i] = glCreateSyncFromCLeventARB(queues[i].getParent(), clEvents[i], 0);
+            }
+        }
+
+        // block until done (important: finish before doing further gl work)
+        if (!syncGLtoCL) {
+            for (int i = 0; i < slices; i++) {
+                clFinish(queues[i]);
+            }
+        }
+        
+        render(img);
+    }
+    
+    private void render(Image img){
+         glClear(GL_COLOR_BUFFER_BIT);
+
+        if (syncGLtoCL) {
+            for (int i = 0; i < slices; i++) {
+                glWaitSync(clSyncs[i], 0, 0);
+            }
+        }
+
+        //draw slices
+        int sliceWidth = img.getWidth() / slices;
+
+        if (useTextures) {
+            for (int i = 0; i < slices; i++) {
+                int seperatorOffset = drawSeparator ? i : 0;
+
+                glBindTexture(GL_TEXTURE_2D, glIDs.get(i));
+                //glCallList(dlist);
+            }
+        } else {
+            for (int i = 0; i < slices; i++) {
+                int seperatorOffset = drawSeparator ? i : 0;
+
+                glBindBuffer(GL_PIXEL_UNPACK_BUFFER, glIDs.get(i));
+                glRasterPos2i(sliceWidth * i + seperatorOffset, 0);
+
+                glDrawPixels(sliceWidth, img.getHeight(), GL_RGBA, GL_UNSIGNED_BYTE, 0);
+            }
+            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        }
+
+        if (syncCLtoGL) {
+            glSync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            glEvent = clCreateEventFromGLsyncKHR(context, glSync, null);
         }
     }
 }
