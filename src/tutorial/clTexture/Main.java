@@ -6,7 +6,6 @@
 package tutorial.clTexture;
 
 import static java.lang.Math.min;
-import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.List;
 import static org.lwjgl.opengl.GL11.*;
@@ -17,6 +16,7 @@ import org.lwjgl.opencl.CL;
 import org.lwjgl.opencl.CL10;
 import static org.lwjgl.opencl.CL10.CL_PROGRAM_BUILD_LOG;
 import static org.lwjgl.opencl.CL10.CL_QUEUE_PROFILING_ENABLE;
+import static org.lwjgl.opencl.CL10.clReleaseMemObject;
 import org.lwjgl.opencl.CL10GL;
 import org.lwjgl.opencl.CLCapabilities;
 import org.lwjgl.opencl.CLCommandQueue;
@@ -29,20 +29,14 @@ import org.lwjgl.opencl.CLMem;
 import org.lwjgl.opencl.CLPlatform;
 import org.lwjgl.opencl.CLProgram;
 import org.lwjgl.opencl.api.Filter;
-import static org.lwjgl.opengl.GL20.glCreateProgram;
-import static org.lwjgl.opengl.GL20.glGetUniformLocation;
-import static org.lwjgl.opengl.GL20.glLinkProgram;
-import static org.lwjgl.opengl.GL20.glUniform1i;
-import static org.lwjgl.opengl.GL20.glUseProgram;
+import static org.lwjgl.opengl.GL15.glDeleteBuffers;
 
 /*
  * @author labramson
  */
 public class Main {
 
-    //IMAGE FOR THE TEXTURE
-    private static final String imgDir = "C:\\Users\\labramson\\Documents\\Tutorial\\res\\";
-    public static String imgName = "smileTexture2.jpg";
+    private Image img;
 
     static final String kernel
             = "kernel void imgTest(read_only image2d_t srcImage, write_only image2d_t finalImage){\n"
@@ -60,9 +54,7 @@ public class Main {
     private CLCommandQueue[] queues;  //array of cl command queues
     private CLKernel[] kernels;  //array of cl kernels for 
     private CLProgram[] programs;  //array of cl programs for 
-    private int program;  //array of cl programs for 
     private CLMem[] glBuffers;  //array of clm for 
-    private CLMem[] colorMap;  //array of cl color maps for 
     private IntBuffer glIDs;  //int buffer for 
     private boolean useTextures;  //for something...
     private final PointerBuffer kernel2DGlobalWorkSize = BufferUtils.createPointerBuffer(2);  //the global work size of the kernel
@@ -86,19 +78,21 @@ public class Main {
     }
 
     public static void main(String... args) throws Exception {
+        //IMAGE FOR THE TEXTURE
+        String imgDir = "C:\\Users\\labramson\\Documents\\Tutorial\\res\\";
+        String imgName = "smileTexture2.jpg";
+        //GET THE IMAGE OBJ
+        Image img = new Image(imgDir + "" + imgName);
+
         initDisplay();
         initGL();
-
-        //GET THE IMAGE AND GREATE THE GL TEXTURE
-        Image img = new Image(imgDir + "" + imgName);
-        Texture texture = new Texture(img, GL_TEXTURE_2D, GL11.glGenTextures());
 
         //init
         Main run = new Main();
         run.initCL();
+        run.initGLTexture(img);
 
-        CLMem mem = run.createTexture(texture);
-
+        //CLMem mem = run.createTexture(texture);
         //CONVERT GL TEXTURE TO CL TEXTURE
         while (!Display.isCloseRequested()) {
             //SETS GL SETTINGS
@@ -159,6 +153,34 @@ public class Main {
         glDisable(GL_DEPTH_TEST); //DISABLES DEPTH TEST
         glEnable(GL_TEXTURE_2D); //ENABLES GL_TEXTURE_2D
         glPixelStorei(GL_PACK_ALIGNMENT, 4);
+    }
+
+    public void initGLTexture(Image img) {
+        if (glBuffers == null) {
+            glBuffers = new CLMem[slices];
+            glIDs = BufferUtils.createIntBuffer(slices);
+        } else {
+            for (CLMem mem : glBuffers) {
+                clReleaseMemObject(mem);
+            }
+
+            if (useTextures) {
+                glDeleteTextures(glIDs);
+            } else {
+                glDeleteBuffers(glIDs);
+            }
+        }
+
+        if (useTextures) {
+            GL11.glGenTextures(glIDs);
+
+            for (int i = 0; i < slices; i++) {
+                Texture texture = new Texture(img, GL_TEXTURE_2D, glIDs.get(i));
+                glBuffers[i] = CL10GL.clCreateFromGLTexture2D(context, CL10.CL_MEM_READ_ONLY, texture.getTarget(), 0, texture.getId(), null);
+            }
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+        buffersInitialized = true;
     }
 
     public void initCL() {
@@ -302,9 +324,5 @@ public class Main {
         } else {
             System.out.println("CL to GL sync: Using glFinish");
         }
-    }
-
-    private CLMem createTexture(Texture texture) {
-        return CL10GL.clCreateFromGLTexture2D(context, CL10.CL_MEM_READ_ONLY, texture.getTarget(), 0, texture.getId(), null);
     }
 }
