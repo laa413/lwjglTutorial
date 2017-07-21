@@ -22,12 +22,12 @@ import javax.imageio.ImageIO;
 public class Image {
 
     private final int width, height;
-    private BufferedImage img;
+    private final BufferedImage img;
 
     /* The color model including alpha for the GL image */
-    private ColorModel glAlphaColorModel;
+    private final ColorModel glAlphaColorModel;
     /* The color model for the GL image */
-    private ColorModel glColorModel;
+    private final ColorModel glColorModel;
 
     public Image(String imgFile) {
         this.img = getBuffImage(imgFile);
