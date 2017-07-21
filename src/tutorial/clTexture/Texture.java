@@ -5,19 +5,13 @@
  */
 package tutorial.clTexture;
 
-import java.awt.Color;
 import static java.lang.Math.min;
 import java.nio.FloatBuffer;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
-import java.util.List;
-import java.util.Set;
 
 import org.lwjgl.BufferUtils;
-import org.lwjgl.LWJGLException;
 import org.lwjgl.PointerBuffer;
-import org.lwjgl.opengl.Display;
-import org.lwjgl.opengl.Drawable;
 import org.lwjgl.opengl.GL11;
 import static org.lwjgl.opengl.GL11.GL_NEAREST;
 import static org.lwjgl.opengl.GL11.GL_RGB;
@@ -32,43 +26,25 @@ import static org.lwjgl.opengl.GL11.glTexImage2D;
 import static org.lwjgl.opengl.GL11.glTexParameteri;
 import static org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE;
 
-import org.lwjgl.opencl.CL;
 import org.lwjgl.opencl.CL10;
-import static org.lwjgl.opencl.CL10.CL_MAP_WRITE;
-import static org.lwjgl.opencl.CL10.CL_MEM_COPY_HOST_PTR;
-import static org.lwjgl.opencl.CL10.CL_MEM_READ_ONLY;
-import static org.lwjgl.opencl.CL10.CL_MEM_WRITE_ONLY;
-import static org.lwjgl.opencl.CL10.CL_QUEUE_PROFILING_ENABLE;
-import static org.lwjgl.opencl.CL10.CL_TRUE;
 import static org.lwjgl.opencl.CL10.clBuildProgram;
-import static org.lwjgl.opencl.CL10.clCreateBuffer;
 import static org.lwjgl.opencl.CL10.clCreateKernel;
 import static org.lwjgl.opencl.CL10.clCreateProgramWithSource;
-import static org.lwjgl.opencl.CL10.clEnqueueNDRangeKernel;
-import static org.lwjgl.opencl.CL10.clEnqueueReadBuffer;
-import static org.lwjgl.opencl.CL10.clEnqueueWriteBuffer;
-import static org.lwjgl.opencl.CL10.clFinish;
-import org.lwjgl.opencl.CL10GL;
 import org.lwjgl.opencl.CLCapabilities;
 import org.lwjgl.opencl.CLCommandQueue;
 import org.lwjgl.opencl.CLContext;
 import org.lwjgl.opencl.CLDevice;
-import org.lwjgl.opencl.CLDeviceCapabilities;
 import org.lwjgl.opencl.CLEvent;
 import org.lwjgl.opencl.CLKernel;
 import org.lwjgl.opencl.CLMem;
-import org.lwjgl.opencl.CLPlatform;
 import org.lwjgl.opencl.CLProgram;
 import org.lwjgl.opencl.Util;
-import org.lwjgl.opencl.api.Filter;
 import org.lwjgl.opengl.ContextCapabilities;
 import static org.lwjgl.opengl.GL11.GL_COMPILE;
 import static org.lwjgl.opengl.GL11.glGenLists;
 import static org.lwjgl.opengl.GL11.glNewList;
 import org.lwjgl.opengl.GLContext;
 import org.lwjgl.opengl.GLSync;
-
-import static tutorial.clTexture.Main.toFloatBuffer;
 
 /*
  * @author LAA
@@ -86,9 +62,9 @@ public class Texture {
     static final FloatBuffer b = toFloatBuffer(new float[]{9, 8, 7, 6, 5, 4, 3, 2, 1, 0});
     static final FloatBuffer answer = BufferUtils.createFloatBuffer(a.capacity());
 
-    //TRYING TO WORK WITH BUFFERS
-    public ByteBuffer buf, ptrbufs;
-    public PointerBuffer pointers, ptrbuff;
+//    //TRYING TO WORK WITH BUFFERS
+//    public ByteBuffer buf, ptrbufs;
+//    public PointerBuffer pointers, ptrbuff;
 
     //MY KERNEL FUNCTION FROM TEXTBOOK PG
     static final String kernel
@@ -143,85 +119,6 @@ public class Texture {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, image.getWidth() + 1, image.getHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, image.getByeBuff());
-    }
-
-    public void convertToCL() {
-        try {
-            CLContext context = createCLContext();
-
-            queues = new CLCommandQueue[slices];
-            kernels = new CLKernel[slices];
-
-            // Create an command queue using our OpenCL context and the first device in our list of devices
-            for (int i = 0; i < slices; i++) {
-                colorMap[i] = clCreateBuffer(clContext, CL_MEM_READ_ONLY, 256, null);
-                colorMap[i].checkValid();
-
-                // create command queue and upload color map buffer on each used device
-                queues[i] = CL10.clCreateCommandQueue(context, context.getInfoDevices().get(i), CL_QUEUE_PROFILING_ENABLE, null);
-                queues[i].checkValid();
-
-                CL10.clEnqueueUnmapMemObject(queues[i], colorMap[i], null, null, null);
-            }
-            //CLCommandQueue queue = CL10.clCreateCommandQueue(context, context.getInfoDevices().get(0), CL10.CL_QUEUE_PROFILING_ENABLE, null);
-            System.out.println("Command Queue created");
-
-            CLMem mem = CL10GL.clCreateFromGLTexture2D(context, CL10.CL_MEM_READ_ONLY, target, 0, id, null);
-            CLMem mem2 = CL10GL.clCreateFromGLTexture2D(context, CL10.CL_MEM_WRITE_ONLY, target, 0, id, null);
-
-            GL11.glFinish();
-
-            kernelFunction(context, queues);
-        } catch (Exception e) {
-            System.out.println("*** Problem creating CL texture");
-            e.printStackTrace();
-        }
-    }
-
-    private CLContext createCLContext() {
-        try {
-            // Initialize OpenCL and create a context and command queue
-            CL.create();
-            System.out.println("\nCL created");
-
-            // Drawable context that OpenCL needs
-            Drawable drawable = Display.getDrawable();
-            System.out.println("Drawable created");
-
-            // LWJGL CLPlatform object
-            CLPlatform platform = CLPlatform.getPlatforms().get(0);
-            System.out.println("Platform created");
-
-            final Filter<CLDevice> glSharingFilter;
-            glSharingFilter = (final CLDevice device) -> {
-                final CLDeviceCapabilities abilities = CLCapabilities.getDeviceCapabilities(device);
-                return abilities.CL_KHR_gl_sharing;
-            };
-
-            // List of LJWGL CLDevice objects representing hardware or software contexts that OpenCL can use
-            List<CLDevice> devices = platform.getDevices(CL10.CL_DEVICE_TYPE_GPU);
-            if (devices == null) {
-                deviceType = CL10.CL_DEVICE_TYPE_CPU;
-                devices = platform.getDevices(CL10.CL_DEVICE_TYPE_CPU, glSharingFilter);
-                if (devices == null) {
-                    throw new RuntimeException("No OpenCL devices found with KHR_gl_sharing support.");
-                }
-            }
-            System.out.println("Devices obtained");
-
-            // Create the OpenCL context using the patform, devices, and the OpenGL drawable
-            CLContext context = CLContext.create(platform, devices, null, drawable, null);
-            System.out.println("Context created");
-
-            slices = min(devices.size(), MAX_GPUS);
-
-            return context;
-
-        } catch (LWJGLException e) {
-            System.out.println("*** Problem initializing OpenCL");
-            e.printStackTrace();
-            return null;
-        }
     }
 
     private void kernelFunction(CLContext context, CLCommandQueue[] queues) {
@@ -279,9 +176,10 @@ public class Texture {
          */
         //Trying logic from demofractal
         for (int i = 0; i < programs.length; i++) {
-            programs[i] = clCreateProgramWithSource(clContext, kernel, null);
+            final CLDevice device = queues[i].getCLDevice();
+            programs[i] = clCreateProgramWithSource(context, kernel, null);
             //Checks if there was an error in creation
-            Util.checkCLError(clBuildProgram(programs[i], context.getInfoDevices().get(i), "", null));
+            Util.checkCLError(clBuildProgram(programs[i],device, "", null));
         }
 
         for (int i = 0; i < kernels.length; i++) {
@@ -319,10 +217,7 @@ public class Texture {
         if (useTextures){
             glNewList(glGenLists(1), GL_COMPILE);
             
-            
         }
-        
-        
     }
 
     public void bind() {
@@ -347,5 +242,11 @@ public class Texture {
 
     public int getHeight() {
         return height;
+    }
+    
+    static FloatBuffer toFloatBuffer(float[] floats) {
+        FloatBuffer buf = BufferUtils.createFloatBuffer(floats.length).put(floats);
+        buf.rewind();
+        return buf;
     }
 }
