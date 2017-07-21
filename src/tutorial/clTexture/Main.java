@@ -59,60 +59,62 @@ public class Main {
             + "}";
 
     //VARS FOR CL CONVERSION
-    private static final int MAX_GPUS = 8; //Max GPUs used at once
-    private CLContext context;  //CL context
     private CLCommandQueue[] queues;  //array of cl command queues
+    private CLContext context;  //CL context
+    private CLEvent glEvent;  //cl event 
+    private CLEvent[] clEvents;  //array of cl events for 
     private CLKernel[] kernels;  //array of cl kernels for 
-    private CLProgram[] programs;  //array of cl programs for 
     private CLMem[] glBuffers;  //array of clm for 
+    private CLProgram[] programs;  //array of cl programs for 
+    private GLSync glSync; //glsync so that cl & gl dont cause race condition
+    private GLSync[] clSyncs; //array of gl sync objects for 
     private IntBuffer glIDs;  //int buffer for 
-    private boolean useTextures = true;  //for something...
-    private final PointerBuffer kernel2DGlobalWorkSize = BufferUtils.createPointerBuffer(2);  //the global work size of the kernel
-    private int slices;  //dividing up the image for faster processing
-    private boolean drawSeparator;  //no idea what this is
-    private boolean doublePrecision = true;  //doubles used instead of floats
     private boolean buffersInitialized;  //buffers for something initialized
+    private boolean doublePrecision = true;  //doubles used instead of floats
+    private boolean drawSeparator;  //no idea what this is
     private boolean rebuild;  //boolean for rerendering
     private boolean run = true;  //boolena for running the program
-    private final PointerBuffer syncBuffer = BufferUtils.createPointerBuffer(1);  //buffer for dealing with gl cl sync
-    private boolean syncGLtoCL; // true if we can make GL wait on events generated from CL queues.
     private boolean syncCLtoGL; // true if we can make CL wait on sync objects generated from GL.
-    private CLEvent[] clEvents;  //array of cl events for 
-    private CLEvent glEvent;  //cl event 
-    private GLSync[] clSyncs; //array of gl sync objects for 
-    private GLSync glSync; //glsync so that cl & gl dont cause race condition
+    private boolean syncGLtoCL; // true if we can make GL wait on events generated from CL queues.
+    private boolean useTextures = true;  //for something...
+    private final PointerBuffer kernel2DGlobalWorkSize = BufferUtils.createPointerBuffer(2);  //the global work size of the kernel
+    private final PointerBuffer syncBuffer = BufferUtils.createPointerBuffer(1);  //buffer for dealing with gl cl sync
     private int deviceType = CL10.CL_DEVICE_TYPE_GPU;
+    private int slices;  //dividing up the image for faster processing
+    private static final int MAX_GPUS = 8; //Max GPUs used at once
 
     //CONSTRUCTOR
-    public Main() {}
+    public Main() {
+    }
 
     public static void main(String... args) throws Exception {
-        //IMAGE FOR THE TEXTURE
+        //IMAGE FILE
         String imgDir = "C:\\Users\\labramson\\Documents\\Tutorial\\res\\";
         String imgName = "smileTexture2.jpg";
-        //GET THE IMAGE OBJ
+        //CREATE IMAGE OBJECT
         Image img = new Image(imgDir + "" + imgName);
 
+        //INIT DISPLAY & GL CONTEXT
         initDisplay();
         initGL();
-        
-        //Program object used to run functions
+
+        //INSTANCE OF MAIN TO RUN FUNCTIONS
         Main run = new Main();
 
-        //init
+        //SET UP CL
         run.initCL();
+        //CREATE THE TEXTURE IN GL CONTEXT
         run.initGLTexture(img);
+        //COMPLETE ALL GL
         glFinish();
+        //SET THE KERNEL PARAMS FOR CL COMPUTAIONS
         run.setKernelParams();
-        
-        //Display Loop
-        while (!Display.isCloseRequested()) {
-            run.display(img);
-            
-            //SETS GL SETTINGS
-            glSettings();
 
-            
+        //DISPLAY LOOP
+        while (!Display.isCloseRequested()) {
+            //ALLOWS DISPLAYING ON SCREEN
+            run.display(img);
+
             //IF ESC THEN CLOSE
             if (Keyboard.isKeyDown(Keyboard.KEY_ESCAPE)) {
                 Display.destroy();
@@ -132,6 +134,7 @@ public class Main {
         try {
             Display.setDisplayMode(new DisplayMode(300, 300));
             Display.setTitle("Texture Demo");
+            Display.setSwapInterval(0);
             Display.create();
         } catch (LWJGLException e) {
             e.printStackTrace();
@@ -148,6 +151,7 @@ public class Main {
         glLoadIdentity();
     }
 
+    //GL SETTINGS FOR THE TEXTURE
     public static void glSettings() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //CLEARS SCREEN EACH LOOP
         glDisable(GL_DEPTH_TEST); //DISABLES DEPTH TEST
@@ -155,6 +159,7 @@ public class Main {
         glPixelStorei(GL_PACK_ALIGNMENT, 4);
     }
 
+    //INITIALIZE THE GL TEXTURE
     public void initGLTexture(Image img) {
         if (glBuffers == null) {
             glBuffers = new CLMem[slices];
@@ -183,6 +188,7 @@ public class Main {
         buffersInitialized = true;
     }
 
+    //INITIALIZE CL PLATFORM, DEVICES, CONTEXT, COMMAND QUEUE, KERNEL
     public void initCL() {
         try {
             // Initialize OpenCL
@@ -235,21 +241,6 @@ public class Main {
 
             //CHECK SYNC STATUS BTWN GL & CL
             syncStatus(context);
-            
-            //DRAW A SQUARE WITH MAPPED TEXTURE
-            glBegin(GL_QUADS);
-            glTexCoord2f(0, 0);
-            glVertex2i(100, 100); //upper left
-
-            glTexCoord2f(0, 1);
-            glVertex2i(100, 200); //upper right
-
-            glTexCoord2f(1, 1);
-            glVertex2i(200, 200); //bottom right
-
-            glTexCoord2f(1, 0);
-            glVertex2i(200, 100); //bottom left
-            glEnd();
 
         } catch (Exception e) {
             System.out.println("*** Problem creating CL texture");
@@ -294,6 +285,7 @@ public class Main {
         }
     }
 
+    //FILLS THE COMMAND QUEUE APPROPRIATELY
     private void fillQueue(CLContext context) {
         for (int i = 0; i < slices; i++) {
             // create command queue on each used device
@@ -302,20 +294,21 @@ public class Main {
         }
     }
 
+    //INITIALIZES THE KERNEL
     private void initKernel() {
-        // init kernel with constants
         for (int i = 0; i < kernels.length; i++) {
             kernels[i] = CL10.clCreateKernel(programs[min(i, programs.length)], "imgTest", null);
         }
     }
 
+    //PASSES IN THE ARGUMENTS TO THE KERNEL
     private void setKernelParams() {
         for (int i = 0; i < slices; i++) {
-            kernels[i]
-                    .setArg(0, glBuffers[i]);
+            kernels[i].setArg(0, glBuffers[i]);
         }
     }
 
+    //CHECKS THE SYNC STATUS BTWN GL & CL AND VISE VERSA
     private void syncStatus(CLContext context) {
         final ContextCapabilities abilities = GLContext.getCapabilities();
 
@@ -345,9 +338,11 @@ public class Main {
             System.out.println("CL to GL sync: Using glFinish");
         }
     }
-    
-    public void display(Image img){
-         if (syncCLtoGL && glEvent != null) {
+
+    //DISPLAYS THE RESULTS
+    public void display(Image img) {
+        //CHECKS TO MAKE SURE ALL GL EVENTS HAVE COMPLETED
+        if (syncCLtoGL && glEvent != null) {
             for (final CLCommandQueue queue : queues) {
                 clEnqueueWaitForEvents(queue, glEvent);
             }
@@ -355,20 +350,24 @@ public class Main {
             glFinish();
         }
 
+        //IF THE GL TEXTURE BUFFERS HAVE NOT BEEN INITIALIZED
         if (!buffersInitialized) {
             initGLTexture(img);
             setKernelParams();
         }
 
+        //IF CHANGES OCCURED, AND NEEDS TO REBUILD PROGRAM & KERNEL
         if (rebuild) {
             buildProgram(context);
             setKernelParams();
         }
 
+        //SETS THE WORKSIZE OF THE KERNEL
         kernel2DGlobalWorkSize.put(0, img.getWidth()).put(1, img.getHeight());
 
+        //GETS THE GL OBJECTS 
         for (int i = 0; i < slices; i++) {
-        // acquire GL objects, and enqueue a kernel with a probe from the list
+            // acquire GL objects, and enqueue a kernel with a probe from the list
             clEnqueueAcquireGLObjects(queues[i], glBuffers[i], null, null);
 
             clEnqueueNDRangeKernel(queues[i], kernels[i], 2,
@@ -390,13 +389,12 @@ public class Main {
                 clFinish(queues[i]);
             }
         }
-        
+
+        //RENDER THE TEXTURE
         render(img);
     }
-    
-    private void render(Image img){
-         glClear(GL_COLOR_BUFFER_BIT);
 
+    private void render(Image img) {
         if (syncGLtoCL) {
             for (int i = 0; i < slices; i++) {
                 glWaitSync(clSyncs[i], 0, 0);
@@ -406,25 +404,32 @@ public class Main {
         //draw slices
         int sliceWidth = img.getWidth() / slices;
 
-        if (useTextures) {
-            for (int i = 0; i < slices; i++) {
-                int seperatorOffset = drawSeparator ? i : 0;
+        for (int i = 0; i < slices; i++) {
+            int seperatorOffset = drawSeparator ? i : 0;
 
-                glBindTexture(GL_TEXTURE_2D, glIDs.get(i));
-                //glCallList(dlist);
-            }
-        } else {
-            for (int i = 0; i < slices; i++) {
-                int seperatorOffset = drawSeparator ? i : 0;
+            //BIND THE TEXTURE
+            glBindTexture(GL_TEXTURE_2D, glIDs.get(i));
+            
+            //SETS GL SETTINGS
+            glSettings();
 
-                glBindBuffer(GL_PIXEL_UNPACK_BUFFER, glIDs.get(i));
-                glRasterPos2i(sliceWidth * i + seperatorOffset, 0);
+            //DRAW A SQUARE WITH MAPPED TEXTURE
+            glBegin(GL_QUADS);
+            glTexCoord2f(0, 0);
+            glVertex2i(100, 100); //upper left
 
-                glDrawPixels(sliceWidth, img.getHeight(), GL_RGBA, GL_UNSIGNED_BYTE, 0);
-            }
-            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+            glTexCoord2f(0, 1);
+            glVertex2i(100, 200); //upper right
+
+            glTexCoord2f(1, 1);
+            glVertex2i(200, 200); //bottom right
+
+            glTexCoord2f(1, 0);
+            glVertex2i(200, 100); //bottom left
+            glEnd();
         }
 
+        //CHECKING SYNC
         if (syncCLtoGL) {
             glSync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
             glEvent = clCreateEventFromGLsyncKHR(context, glSync, null);
