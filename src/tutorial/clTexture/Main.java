@@ -49,13 +49,23 @@ public class Main {
 
     public static Image img;
 
-    static final String kernel
+    static final String source
             = "kernel void imgTest(__read_only image2d_t inputTexture){\n"
             + "    int2 imgCoords = (int2)(get_global_id(0), get_global_id(1));\n"
             + "    //printf(\"Coord x:%d Coord y:%d \", imgCoords.x, imgCoords.y);\n\n"
             + "    const sampler_t smp =  CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;\n\n"
             + "    float4 imgVal = read_imagef(inputTexture, smp, imgCoords); \n"
             + "    printf(\"(%d, %d) RGBA(%f, %f, %f, %f)\\n\", imgCoords.x, imgCoords.y, imgVal.x, imgVal.y, imgVal.z, imgVal.w);\n"
+            + "}";
+
+    static final String code
+            = "kernel void imgTest2(read_only image2d_t inTexture, write_only image2d_t outTexture){\n"
+            + "    const sampler_t smp =  CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;\n\n"
+            + "    uint offset = get_global_id(1)*0x4000 + get_global_id(0)*0x1000;\n"
+            + "    int2 coord = (int2)(get_global_id(0), get_global_id(1));\n"
+            + "    uint4 pixel = read_imageui(inTexture, smp, coord);\n"
+            + "    pixel.x -= offset;\n"
+            + "    write_imageui(outTexture, coord, pixel);\n"
             + "}";
 
     //VARS FOR CL CONVERSION
@@ -65,15 +75,17 @@ public class Main {
     private CLEvent[] clEvents;  //array of cl events for 
     private CLKernel[] kernels;  //array of cl kernels for 
     private CLMem[] glBuffers;  //array of clm for 
+    private CLMem[] glBuffersOut;  //array of clm for 
     private CLProgram[] programs;  //array of cl programs for 
     private GLSync glSync; //glsync so that cl & gl dont cause race condition
     private GLSync[] clSyncs; //array of gl sync objects for 
     private IntBuffer glIDs;  //int buffer for 
+    private IntBuffer glIDs2;  //int buffer for 
     private boolean buffersInitialized;  //buffers for something initialized
     private boolean doublePrecision = true;  //doubles used instead of floats
     private boolean drawSeparator;  //no idea what this is
     private boolean rebuild;  //boolean for rerendering
-    private boolean run = true;  //boolena for running the program
+    private boolean run = true;  //boolean for running the program
     private boolean syncCLtoGL; // true if we can make CL wait on sync objects generated from GL.
     private boolean syncGLtoCL; // true if we can make GL wait on events generated from CL queues.
     private boolean useTextures = true;  //for something...
@@ -82,6 +94,7 @@ public class Main {
     private int deviceType = CL10.CL_DEVICE_TYPE_GPU;
     private int slices;  //dividing up the image for faster processing
     private static final int MAX_GPUS = 8; //Max GPUs used at once
+    public static Image img2;
 
     //CONSTRUCTOR
     public Main() {
@@ -93,7 +106,8 @@ public class Main {
         String imgName = "smileTexture2.jpg";
         //CREATE IMAGE OBJECT
         Image img = new Image(imgDir + "" + imgName);
-
+        img2 = new Image(imgDir + "" + imgName);
+        
         //INIT DISPLAY & GL CONTEXT
         initDisplay();
         initGL();
@@ -163,7 +177,10 @@ public class Main {
     public void initGLTexture(Image img) {
         if (glBuffers == null) {
             glBuffers = new CLMem[slices];
+            glBuffersOut = new CLMem[slices];
+            
             glIDs = BufferUtils.createIntBuffer(slices);
+            glIDs2 = BufferUtils.createIntBuffer(slices);
         } else {
             for (CLMem mem : glBuffers) {
                 clReleaseMemObject(mem);
@@ -178,10 +195,16 @@ public class Main {
 
         if (useTextures) {
             GL11.glGenTextures(glIDs);
-
+            GL11.glGenTextures(glIDs2);
             for (int i = 0; i < slices; i++) {
                 Texture texture = new Texture(img, GL_TEXTURE_2D, glIDs.get(i));
                 glBuffers[i] = CL10GL.clCreateFromGLTexture2D(context, CL10.CL_MEM_READ_ONLY, texture.getTarget(), 0, texture.getId(), null);
+            }
+            glBindTexture(GL_TEXTURE_2D, 0);
+            
+            for (int i = 0; i < slices; i++) {
+                Texture texture = new Texture(img2, GL_TEXTURE_2D, glIDs2.get(i));
+                glBuffersOut[i] = CL10GL.clCreateFromGLTexture2D(context, CL10.CL_MEM_WRITE_ONLY, texture.getTarget(), 0, texture.getId(), null);
             }
             glBindTexture(GL_TEXTURE_2D, 0);
         }
@@ -258,7 +281,7 @@ public class Main {
         }
 
         for (int i = 0; i < programs.length; i++) {
-            programs[i] = CL10.clCreateProgramWithSource(context, kernel, null);
+            programs[i] = CL10.clCreateProgramWithSource(context, code, null);
         }
 
         for (int i = 0; i < programs.length; i++) {
@@ -297,14 +320,15 @@ public class Main {
     //INITIALIZES THE KERNEL
     private void initKernel() {
         for (int i = 0; i < kernels.length; i++) {
-            kernels[i] = CL10.clCreateKernel(programs[min(i, programs.length)], "imgTest", null);
+            kernels[i] = CL10.clCreateKernel(programs[min(i, programs.length)], "imgTest2", null);
         }
     }
 
     //PASSES IN THE ARGUMENTS TO THE KERNEL
     private void setKernelParams() {
         for (int i = 0; i < slices; i++) {
-            kernels[i].setArg(0, glBuffers[i]);
+            kernels[i].setArg(0, glBuffers[i])
+                    .setArg(1, glBuffersOut[i]);
         }
     }
 
@@ -408,8 +432,8 @@ public class Main {
             int seperatorOffset = drawSeparator ? i : 0;
 
             //BIND THE TEXTURE
-            glBindTexture(GL_TEXTURE_2D, glIDs.get(i));
-            
+            glBindTexture(GL_TEXTURE_2D, glIDs2.get(i));
+
             //SETS GL SETTINGS
             glSettings();
 
