@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package tutorial.clTexture;
+package tutorial.clTexture3d;
 
 import java.nio.IntBuffer;
 import java.util.List;
@@ -38,6 +38,7 @@ import static org.lwjgl.opengl.ARBSync.GL_SYNC_GPU_COMMANDS_COMPLETE;
 import static org.lwjgl.opengl.ARBSync.glFenceSync;
 import static org.lwjgl.opengl.ARBSync.glWaitSync;
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
 import static org.lwjgl.opengl.GL15.glBindBuffer;
 import static org.lwjgl.opengl.GL15.glDeleteBuffers;
 import static org.lwjgl.opengl.GL21.GL_PIXEL_UNPACK_BUFFER;
@@ -60,15 +61,16 @@ public class Main {
             + "    printf(\"(%d, %d) RGBA(%f, %f, %f, %f)\\n\", imgCoords.x, imgCoords.y, imgVal.x, imgVal.y, imgVal.z, imgVal.w);\n"
             + "}";
     static final String code
-            = "kernel void imgTest2(__read_only image2d_t inTexture, __write_only image2d_t outTexture){\n"
+           = "kernel void imgTest2(__read_only image3d_t inTexture, __write_only image3d_t outTexture){\n"
+            + "    #pragma OPENCL EXTENSION cl_khr_3d_image_writes: enable;\n"
             + "    const sampler_t smp =  CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;\n\n"
             + "    uint offset = get_global_id(1)*0x4000 + get_global_id(0)*0x1000;\n"
             + "    int2 coord = (int2)(get_global_id(0), get_global_id(1));\n"
             + "    float4 pixel = read_imagef(inTexture, smp, coord);\n"
             + "    if  (coord.x > 5 & coord.y > 5) { \n"
-            + "        pixel.x /= 1.5;\n"
-            + "        pixel.y /= 1.5;\n"
-            + "        pixel.z /= 1.5;\n"
+            + "        pixel.x -= 1.5;\n"
+            + "        pixel.y -= 1.5;\n"
+            + "        pixel.z -= 1.5;\n"
             + "    }\n"
             + "    write_imagef(outTexture, coord, pixel);\n"
             + "}";
@@ -121,14 +123,14 @@ public class Main {
 
         //SET UP CL
         run.initCL();
-
+        
         //CREATE THE TEXTURE IN GL CONTEXT
         run.initGLTexture(img);
         run.initWritableTexture(img2);
-
+        
         //COMPLETE ALL GL
         glFinish();
-
+        
         //SET THE KERNEL PARAMS FOR CL COMPUTAIONS
         run.setKernelParams();
 
@@ -174,9 +176,9 @@ public class Main {
     //GL SETTINGS FOR THE TEXTURE
     public static void glSettings() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //CLEARS SCREEN EACH LOOP
-        glDisable(GL_DEPTH_TEST); //DISABLES DEPTH TEST
-        glEnable(GL_TEXTURE_2D); //ENABLES GL_TEXTURE_2D
-        glPixelStorei(GL_PACK_ALIGNMENT, 4);
+        glEnable(GL_DEPTH_TEST); //DISABLES DEPTH TEST
+        glEnable(GL_TEXTURE_3D); //ENABLES GL_TEXTURE_3D
+        glPixelStorei(GL_PACK_ALIGNMENT, 4); 
     }
 
     //INITIALIZE THE GL TEXTURE
@@ -200,11 +202,11 @@ public class Main {
         if (useTextures) {
             GL11.glGenTextures(glIDs);
             for (int i = 0; i < slices; i++) {
-                Texture texture = new Texture(img, GL_TEXTURE_2D, glIDs.get(i));
-                glBuffers[i] = CL10GL.clCreateFromGLTexture2D(context, CL10.CL_MEM_READ_ONLY, texture.getTarget(), 0, texture.getId(), null);
+                Texture texture = new Texture(img, GL_TEXTURE_3D, glIDs.get(i));
+                glBuffers[i] = CL10GL.clCreateFromGLTexture3D(context, CL10.CL_MEM_READ_ONLY, texture.getTarget(), 0, texture.getId(), null);
                 inTexture = texture;
             }
-            glBindTexture(GL_TEXTURE_2D, 0);
+            glBindTexture(GL_TEXTURE_3D, 0);
         }
     }
 
@@ -228,11 +230,11 @@ public class Main {
         if (useTextures) {
             GL11.glGenTextures(glIDs2);
             for (int i = 0; i < slices; i++) {
-                Texture texture = new Texture(img, GL_TEXTURE_2D, glIDs2.get(i));
-                glBuffersOut[i] = CL10GL.clCreateFromGLTexture2D(context, CL10.CL_MEM_WRITE_ONLY, texture.getTarget(), 0, texture.getId(), null);
+                Texture texture = new Texture(img, GL_TEXTURE_3D, glIDs2.get(i));
+                glBuffersOut[i] = CL10GL.clCreateFromGLTexture3D(context, CL10.CL_MEM_WRITE_ONLY, texture.getTarget(), 0, texture.getId(), null);
                 outTexture = texture;
             }
-            glBindTexture(GL_TEXTURE_2D, 0);
+            glBindTexture(GL_TEXTURE_3D, 0);
         }
         buffersInitialized = true;
     }
@@ -255,6 +257,7 @@ public class Main {
             final Filter<CLDevice> glSharingFilter;
             glSharingFilter = (final CLDevice device) -> {
                 final CLDeviceCapabilities abilities = CLCapabilities.getDeviceCapabilities(device);
+                System.out.println(abilities.CL_KHR_3d_image_writes);
                 return abilities.CL_KHR_gl_sharing;
             };
 
@@ -465,19 +468,70 @@ public class Main {
             //SETS GL SETTINGS
             glSettings();
 
-            //DRAW A SQUARE WITH MAPPED TEXTURE
+            //DRAW A CUBE WITH MAPPED TEXTURE
             glBegin(GL_QUADS);
+            //front
+            System.out.println("Drawing front");
             glTexCoord2f(0, 0);
-            glVertex2i(100, 100); //upper left
-
+            glVertex3i(-1, -1, 1); //upper left
             glTexCoord2f(0, 1);
-            glVertex2i(100, 200); //upper right
-
+            glVertex3i(1, -1, 1); //upper right
             glTexCoord2f(1, 1);
-            glVertex2i(200, 200); //bottom right
-
+            glVertex3i(1, 1, 1); //bottom right
             glTexCoord2f(1, 0);
-            glVertex2i(200, 100); //bottom left
+            glVertex3i(-1, 1, 1); //bottom left
+            //back
+            System.out.println("Drawing back");
+            glTexCoord2f(0, 0);
+            glVertex3i(-1, -1, -1); //upper left
+            glTexCoord2f(0, 1);
+            glVertex3i(-1, 1, -1); //upper right
+            glTexCoord2f(1, 1);
+            glVertex3i(1, 1, -1); //bottom right
+            glTexCoord2f(1, 0);
+            glVertex3i(1, -1, -1); //bottom left
+            
+            //bottom
+            System.out.println("Drawing bottom");
+            glTexCoord2f(0, 0);
+            glVertex3i(-1, -1, -1); //upper left
+            glTexCoord2f(0, 1);
+            glVertex3i(-1, -1, 1); //upper right
+            glTexCoord2f(1, 1);
+            glVertex3i(-1, 1, 1); //bottom right
+            glTexCoord2f(1, 0);
+            glVertex3i(-1, 1, -1); //bottom left 
+            //top
+            System.out.println("Drawing top");
+            glTexCoord2f(0, 0);
+            glVertex3i(1, -1, -1); //upper left
+            glTexCoord2f(0, 1);
+            glVertex3i(1, -1, 1); //upper right
+            glTexCoord2f(1, 1);
+            glVertex3i(1, 1, 1); //bottom right
+            glTexCoord2f(1, 0);
+            glVertex3i(1, 1, -1); //bottom left 
+            
+            //left
+            System.out.println("Drawing left");
+            glTexCoord2f(0, 0);
+            glVertex3i(-1, -1, -1); //upper left
+            glTexCoord2f(0, 1);
+            glVertex3i(1, -1, -1); //upper right
+            glTexCoord2f(1, 1);
+            glVertex3i(1, -1, 1); //bottom right
+            glTexCoord2f(1, 0);
+            glVertex3i(-1, -1, 1); //bottom left 
+            //right
+            System.out.println("Drawing right");
+            glTexCoord2f(0, 0);
+            glVertex3i(-1, 1, -1); //upper left
+            glTexCoord2f(0, 1);
+            glVertex3i(1, 1, -1); //upper right
+            glTexCoord2f(1, 1);
+            glVertex3i(1, 1, 1); //bottom right
+            glTexCoord2f(1, 0);
+            glVertex3i(-1, 1, 1); //bottom left 
             glEnd();
         }
 
