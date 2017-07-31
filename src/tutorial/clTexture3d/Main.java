@@ -62,15 +62,15 @@ public class Main {
             + "}";
     static final String code
            = "kernel void imgTest2(__read_only image3d_t inTexture, __write_only image3d_t outTexture){\n"
-            + "    #pragma OPENCL EXTENSION cl_khr_3d_image_writes: enable;\n"
+            + "    #pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable\n"
             + "    const sampler_t smp =  CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;\n\n"
             + "    uint offset = get_global_id(1)*0x4000 + get_global_id(0)*0x1000;\n"
-            + "    int2 coord = (int2)(get_global_id(0), get_global_id(1));\n"
+            + "    int4 coord = (int4)(get_global_id(0), get_global_id(1), get_global_id(2), get_global_id(3));\n"
             + "    float4 pixel = read_imagef(inTexture, smp, coord);\n"
             + "    if  (coord.x > 5 & coord.y > 5) { \n"
-            + "        pixel.x -= 1.5;\n"
+            + "        pixel.x -= 1.5;\n"  
             + "        pixel.y -= 1.5;\n"
-            + "        pixel.z -= 1.5;\n"
+            + "        pixel.z -= 1.5;\n" 
             + "    }\n"
             + "    write_imagef(outTexture, coord, pixel);\n"
             + "}";
@@ -95,7 +95,7 @@ public class Main {
     private boolean syncGLtoCL; // true if we can make GL wait on events generated from CL queues.
     private final boolean doublePrecision = true;  //doubles used instead of floats
     private final boolean useTextures = true;  //for something...
-    private final PointerBuffer kernel2DGlobalWorkSize = BufferUtils.createPointerBuffer(2);  //the global work size of the kernel
+    private final PointerBuffer kernel2DGlobalWorkSize = BufferUtils.createPointerBuffer(3);  //the global work size of the kernel
     private final PointerBuffer syncBuffer = BufferUtils.createPointerBuffer(1);  //buffer for dealing with gl cl sync
     private int deviceType = CL10.CL_DEVICE_TYPE_GPU;
     private int slices;  //dividing up the image for faster processing
@@ -416,7 +416,7 @@ public class Main {
         }
 
         //SETS THE WORKSIZE OF THE KERNEL
-        kernel2DGlobalWorkSize.put(0, img.getWidth()).put(1, img.getHeight());
+        kernel2DGlobalWorkSize.put(0, img.getWidth()).put(1, img.getHeight()).put(2, 15);
 
         //GETS THE GL OBJECTS 
         for (int i = 0; i < slices; i++) {
@@ -424,7 +424,7 @@ public class Main {
             clEnqueueAcquireGLObjects(queues[i], glBuffers[i], null, null);
             clEnqueueAcquireGLObjects(queues[i], glBuffersOut[i], null, null);
 
-            clEnqueueNDRangeKernel(queues[i], kernels[i], 2,
+            clEnqueueNDRangeKernel(queues[i], kernels[i], 3,
                     null,
                     kernel2DGlobalWorkSize,
                     null,
@@ -441,6 +441,8 @@ public class Main {
         // block until done (important: finish before doing further gl work)
         if (!syncGLtoCL) {
             for (int i = 0; i < slices; i++) {
+                System.out.println("I: " + i);
+                //System.out.println("q: " + queues[i].isValid());
                 clFinish(queues[i]);
             }
         }
@@ -463,7 +465,7 @@ public class Main {
             int seperatorOffset = drawSeparator ? i : 0;
 
             //BIND THE TEXTURE
-            glBindTexture(GL_TEXTURE_2D, outTexture.getId());
+            glBindTexture(GL_TEXTURE_3D, outTexture.getId());
 
             //SETS GL SETTINGS
             glSettings();

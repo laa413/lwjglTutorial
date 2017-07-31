@@ -26,26 +26,27 @@ import static org.lwjgl.opengl.GL12.glTexImage3D;
  */
 public class Texture {
 
-    private final int width, height, target, id;
+    private final int width, height, depth, target, id;
     private final Image image;
 
     public Texture(Image image, int target, int id) {
         this.image = image;
         this.width = image.getWidth();
         this.height = image.getHeight();
+        this.depth = 1024;
         this.target = target;
         this.id = id;
 
         // bind this texture 
         GL11.glBindTexture(target, id);
 
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
        // glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, image.getWidth() + 1, image.getHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, image.getByeBuff());
-        glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB8, 5, 5, 5, 0, GL_RGB, GL_UNSIGNED_BYTE, image.getByeBuff());
+        glTexImage3D(target, 0, GL_RGB8, 5, 5, 5, 0, GL_RGB, GL_UNSIGNED_BYTE, image.getByeBuff());
     }
 
     public void bind() {
