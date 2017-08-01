@@ -61,16 +61,16 @@ public class Main {
             + "    printf(\"(%d, %d) RGBA(%f, %f, %f, %f)\\n\", imgCoords.x, imgCoords.y, imgVal.x, imgVal.y, imgVal.z, imgVal.w);\n"
             + "}";
     static final String code
-           = "kernel void imgTest2(__read_only image3d_t inTexture, __write_only image3d_t outTexture){\n"
+            = "kernel void imgTest2(__read_only image3d_t inTexture, __write_only image3d_t outTexture){\n"
             + "    #pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable\n"
             + "    const sampler_t smp =  CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;\n\n"
             + "    uint offset = get_global_id(1)*0x4000 + get_global_id(0)*0x1000;\n"
-            + "    int4 coord = (int4)(get_global_id(0), get_global_id(1), get_global_id(2), get_global_id(3));\n"
+            + "    int4 coord = (int4)(get_global_id(0), get_global_id(1), get_global_id(2), 0);\n"
             + "    float4 pixel = read_imagef(inTexture, smp, coord);\n"
             + "    if  (coord.x > 5 & coord.y > 5) { \n"
-            + "        pixel.x -= 1.5;\n"  
+            + "        pixel.x -= 1.5;\n"
             + "        pixel.y -= 1.5;\n"
-            + "        pixel.z -= 1.5;\n" 
+            + "        pixel.z -= 1.5;\n"
             + "    }\n"
             + "    write_imagef(outTexture, coord, pixel);\n"
             + "}";
@@ -123,14 +123,14 @@ public class Main {
 
         //SET UP CL
         run.initCL();
-        
+
         //CREATE THE TEXTURE IN GL CONTEXT
         run.initGLTexture(img);
         run.initWritableTexture(img2);
-        
+
         //COMPLETE ALL GL
         glFinish();
-        
+
         //SET THE KERNEL PARAMS FOR CL COMPUTAIONS
         run.setKernelParams();
 
@@ -168,7 +168,7 @@ public class Main {
     public static void initGL() {
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        glOrtho(0, 300, 300, 0, 1, -1);
+        glOrtho(0, 300, 300, 0, 5, -5);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
     }
@@ -178,7 +178,7 @@ public class Main {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //CLEARS SCREEN EACH LOOP
         glEnable(GL_DEPTH_TEST); //DISABLES DEPTH TEST
         glEnable(GL_TEXTURE_3D); //ENABLES GL_TEXTURE_3D
-        glPixelStorei(GL_PACK_ALIGNMENT, 4); 
+        glPixelStorei(GL_PACK_ALIGNMENT, 4);
     }
 
     //INITIALIZE THE GL TEXTURE
@@ -416,7 +416,7 @@ public class Main {
         }
 
         //SETS THE WORKSIZE OF THE KERNEL
-        kernel2DGlobalWorkSize.put(0, img.getWidth()).put(1, img.getHeight()).put(2, 15);
+        kernel2DGlobalWorkSize.put(0, img.getWidth()).put(1, img.getHeight()).put(2, img.getHeight());
 
         //GETS THE GL OBJECTS 
         for (int i = 0; i < slices; i++) {
@@ -442,7 +442,7 @@ public class Main {
         if (!syncGLtoCL) {
             for (int i = 0; i < slices; i++) {
                 System.out.println("I: " + i);
-                //System.out.println("q: " + queues[i].isValid());
+                System.out.println("q: " + queues[i].isValid());
                 clFinish(queues[i]);
             }
         }
@@ -472,68 +472,73 @@ public class Main {
 
             //DRAW A CUBE WITH MAPPED TEXTURE
             glBegin(GL_QUADS);
-            //front
-            System.out.println("Drawing front");
-            glTexCoord2f(0, 0);
-            glVertex3i(-1, -1, 1); //upper left
-            glTexCoord2f(0, 1);
-            glVertex3i(1, -1, 1); //upper right
-            glTexCoord2f(1, 1);
-            glVertex3i(1, 1, 1); //bottom right
-            glTexCoord2f(1, 0);
-            glVertex3i(-1, 1, 1); //bottom left
-            //back
-            System.out.println("Drawing back");
-            glTexCoord2f(0, 0);
-            glVertex3i(-1, -1, -1); //upper left
-            glTexCoord2f(0, 1);
-            glVertex3i(-1, 1, -1); //upper right
-            glTexCoord2f(1, 1);
-            glVertex3i(1, 1, -1); //bottom right
-            glTexCoord2f(1, 0);
-            glVertex3i(1, -1, -1); //bottom left
             
-            //bottom
-            System.out.println("Drawing bottom");
-            glTexCoord2f(0, 0);
-            glVertex3i(-1, -1, -1); //upper left
-            glTexCoord2f(0, 1);
-            glVertex3i(-1, -1, 1); //upper right
-            glTexCoord2f(1, 1);
-            glVertex3i(-1, 1, 1); //bottom right
-            glTexCoord2f(1, 0);
-            glVertex3i(-1, 1, -1); //bottom left 
-            //top
+            // Top-face
             System.out.println("Drawing top");
-            glTexCoord2f(0, 0);
-            glVertex3i(1, -1, -1); //upper left
-            glTexCoord2f(0, 1);
-            glVertex3i(1, -1, 1); //upper right
-            glTexCoord2f(1, 1);
-            glVertex3i(1, 1, 1); //bottom right
-            glTexCoord2f(1, 0);
-            glVertex3i(1, 1, -1); //bottom left 
-            
-            //left
+            glTexCoord3f(0f, 0f, 0f);
+            glVertex3f(1.0f, 1.0f, -1.0f);
+            glTexCoord3f(0f, 1.0f, 0f);
+            glVertex3f(-1.0f, 1.0f, -1.0f);
+            glTexCoord3f(1.0f, 1.0f, 0f);
+            glVertex3f(-1.0f, 1.0f, 1.0f);
+            glTexCoord3f(1.0f, 0f, 0f);
+            glVertex3f(1.0f, 1.0f, 1.0f);
+             
+            // Bottom-face
+            System.out.println("Drawing bottom");
+            glTexCoord3f(0f, 0f, 0f);
+            glVertex3f(1.0f, -1.0f, 1.0f);
+            glTexCoord3f(0f, 1.0f, 0f);
+            glVertex3f(-1.0f, -1.0f, 1.0f);
+            glTexCoord3f(1.0f, 1.0f, 0f);
+            glVertex3f(-1.0f, -1.0f, -1.0f);
+            glTexCoord3f(1.0f, 0f, 0f);
+            glVertex3f(1.0f, -1.0f, -1.0f);
+
+            // Front-face
+            System.out.println("Drawing front");
+            glTexCoord3f(0f, 0f, 0f);
+            glVertex3f(1.0f, 1.0f, 1.0f);
+            glTexCoord3f(0f, 1.0f, 0f);
+            glVertex3f(-1.0f, 1.0f, 1.0f);
+            glTexCoord3f(1.0f, 1.0f, 0f);
+            glVertex3f(-1.0f, -1.0f, 1.0f);
+            glTexCoord3f(1.0f, 0f, 0f);
+            glVertex3f(1.0f, -1.0f, 1.0f);
+
+            // Back-face
+            System.out.println("Drawing back");
+            glTexCoord3f(0f, 0f, 0f);
+            glVertex3f(1.0f, -1.0f, -1.0f);
+            glTexCoord3f(0f, 1.0f, 0f);
+            glVertex3f(-1.0f, -1.0f, -1.0f);
+            glTexCoord3f(1.0f, 1.0f, 0f);
+            glVertex3f(-1.0f, 1.0f, -1.0f);
+             glTexCoord3f(1.0f, 0f, 0f);
+            glVertex3f(1.0f, 1.0f, -1.0f);
+
+            // Left-face
             System.out.println("Drawing left");
-            glTexCoord2f(0, 0);
-            glVertex3i(-1, -1, -1); //upper left
-            glTexCoord2f(0, 1);
-            glVertex3i(1, -1, -1); //upper right
-            glTexCoord2f(1, 1);
-            glVertex3i(1, -1, 1); //bottom right
-            glTexCoord2f(1, 0);
-            glVertex3i(-1, -1, 1); //bottom left 
-            //right
+            glTexCoord3f(0f, 0f, 0f);
+            glVertex3f(-1.0f, 1.0f, 1.0f);
+            glTexCoord3f(0f, 1.0f, 0f);
+            glVertex3f(-1.0f, 1.0f, -1.0f);
+            glTexCoord3f(1.0f, 1.0f, 0f);
+            glVertex3f(-1.0f, -1.0f, -1.0f);
+            glTexCoord3f(1.0f, 0f, 0f);
+            glVertex3f(-1.0f, -1.0f, 1.0f);
+
+            // Right-face
             System.out.println("Drawing right");
-            glTexCoord2f(0, 0);
-            glVertex3i(-1, 1, -1); //upper left
-            glTexCoord2f(0, 1);
-            glVertex3i(1, 1, -1); //upper right
-            glTexCoord2f(1, 1);
-            glVertex3i(1, 1, 1); //bottom right
-            glTexCoord2f(1, 0);
-            glVertex3i(-1, 1, 1); //bottom left 
+            glTexCoord3f(0f, 0f, 0f);
+            glVertex3f(1.0f, 1.0f, -1.0f);
+            glTexCoord3f(0f, 1.0f, 0f);
+            glVertex3f(1.0f, 1.0f, 1.0f);
+            glTexCoord3f(1.0f, 1.0f, 0f);
+            glVertex3f(1.0f, -1.0f, 1.0f);
+            glTexCoord3f(1.0f, 0f, 0f);
+            glVertex3f(1.0f, -1.0f, -1.0f);
+
             glEnd();
         }
 

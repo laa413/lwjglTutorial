@@ -33,7 +33,7 @@ public class Texture {
         this.image = image;
         this.width = image.getWidth();
         this.height = image.getHeight();
-        this.depth = 1024;
+        this.depth = 20;
         this.target = target;
         this.id = id;
 
@@ -46,7 +46,7 @@ public class Texture {
         glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
        // glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, image.getWidth() + 1, image.getHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, image.getByeBuff());
-        glTexImage3D(target, 0, GL_RGB8, 5, 5, 5, 0, GL_RGB, GL_UNSIGNED_BYTE, image.getByeBuff());
+        glTexImage3D(target, 0, GL_RGB8, image.getWidth() + 1, image.getHeight(), depth, 0, GL_RGB, GL_UNSIGNED_BYTE, image.getByeBuff());
     }
 
     public void bind() {

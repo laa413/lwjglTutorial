@@ -72,6 +72,7 @@ public class Image {
             texImage = new BufferedImage(glAlphaColorModel, raster, false, new Hashtable());
         } else {
             raster = Raster.createInterleavedRaster(DataBuffer.TYPE_BYTE, this.img.getWidth() + 1, this.img.getHeight(), 3, null);
+            
             texImage = new BufferedImage(glColorModel, raster, false, new Hashtable());
         }
 
@@ -80,6 +81,7 @@ public class Image {
         g.setColor(new Color(0f, 0f, 0f, 0f));
         g.fillRect(0, 0, this.img.getWidth() + 1, this.img.getHeight());
         g.drawImage(this.img, 0, 0, null);
+        g.fill3DRect(0, 0, width, height, true);
 
         // build a byte buffer from the temporary image to produce a texture
         byte[] data = ((DataBufferByte) texImage.getRaster().getDataBuffer()).getData();
