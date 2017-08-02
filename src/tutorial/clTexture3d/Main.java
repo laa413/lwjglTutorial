@@ -3,8 +3,9 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package tutorial.clTexture;
+package tutorial.clTexture3d;
 
+import com.sun.prism.impl.BufferUtil;
 import java.nio.IntBuffer;
 import java.util.List;
 import org.lwjgl.*;
@@ -25,6 +26,9 @@ import org.lwjgl.opencl.CLProgram;
 import org.lwjgl.opencl.api.Filter;
 import org.lwjgl.opengl.*;
 import static java.lang.Math.min;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.ShortBuffer;
 import static org.lwjgl.opencl.CL10.CL_PROGRAM_BUILD_LOG;
 import static org.lwjgl.opencl.CL10.CL_QUEUE_PROFILING_ENABLE;
 import static org.lwjgl.opencl.CL10.clEnqueueNDRangeKernel;
@@ -37,21 +41,24 @@ import static org.lwjgl.opengl.ARBCLEvent.glCreateSyncFromCLeventARB;
 import static org.lwjgl.opengl.ARBSync.GL_SYNC_GPU_COMMANDS_COMPLETE;
 import static org.lwjgl.opengl.ARBSync.glFenceSync;
 import static org.lwjgl.opengl.ARBSync.glWaitSync;
+import static org.lwjgl.opengl.ARBTextureRg.GL_R16;
+import static org.lwjgl.opengl.ARBTextureRg.GL_R16F;
 import static org.lwjgl.opengl.GL11.*;
-import static org.lwjgl.opengl.GL15.glBindBuffer;
+import static org.lwjgl.opengl.GL12.*;
+//import static org.lwjgl.opengl.GL15.glBindBuffer;
 import static org.lwjgl.opengl.GL15.glDeleteBuffers;
-import static org.lwjgl.opengl.GL21.GL_PIXEL_UNPACK_BUFFER;
+import static org.lwjgl.opengl.GL30.GL_RGBA16F;
+//import static org.lwjgl.opengl.GL21.GL_PIXEL_UNPACK_BUFFER;
 
 /*
  * @author labramson
  */
 public class Main {
-
-    public static Image img;
-    public static Image img2;
+    //public static Image img;
+    //public static Image img2;
     private Texture inTexture, outTexture;
 
-    static final String source
+    static final String kernel_Sample
             = "kernel void imgTest(__read_only image2d_t inputTexture){\n"
             + "    int2 imgCoords = (int2)(get_global_id(0), get_global_id(1));\n"
             + "    //printf(\"Coord x:%d Coord y:%d \", imgCoords.x, imgCoords.y);\n\n"
@@ -59,17 +66,30 @@ public class Main {
             + "    float4 imgVal = read_imagef(inputTexture, smp, imgCoords); \n"
             + "    printf(\"(%d, %d) RGBA(%f, %f, %f, %f)\\n\", imgCoords.x, imgCoords.y, imgVal.x, imgVal.y, imgVal.z, imgVal.w);\n"
             + "}";
-    static final String code
-            = "kernel void imgTest2(__read_only image2d_t inTexture, __write_only image2d_t outTexture){\n"
+    static final String kernel_3DImage
+            = "kernel void imgTest2(__read_only image3d_t inTexture, __write_only image3d_t outTexture){\n"
+            + "    #pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable\n"
             + "    const sampler_t smp =  CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;\n\n"
-            + "    uint offset = get_global_id(1)*0x4000 + get_global_id(0)*0x1000;\n"
-            + "    int2 coord = (int2)(get_global_id(0), get_global_id(1));\n"
+            + "    int4 coord = (int4)(get_global_id(0), get_global_id(1), get_global_id(2), 0);\n"
+            + "    int4 coordL = (int4)(get_global_id(0)-1, get_global_id(1), get_global_id(2), 0);\n"
+            + "    int4 coordR = (int4)(get_global_id(0)+1, get_global_id(1), get_global_id(2), 0);\n"
+            + "    int4 coordT = (int4)(get_global_id(0), get_global_id(1)-1, get_global_id(2), 0);\n"
+            + "    int4 coordBo = (int4)(get_global_id(0), get_global_id(1)+1, get_global_id(2), 0);\n"
+            + "    int4 coordF = (int4)(get_global_id(0), get_global_id(1), get_global_id(2)-1, 0);\n"
+            + "    int4 coordBa = (int4)(get_global_id(0), get_global_id(1), get_global_id(2)-1, 0);\n"
             + "    float4 pixel = read_imagef(inTexture, smp, coord);\n"
-            + "    if  (coord.x > 5 & coord.y > 5) { \n"
-            + "        pixel.x /= 1.5;\n"
-            + "        pixel.y /= 1.5;\n"
-            + "        pixel.z /= 1.5;\n"
-            + "    }\n"
+            + "    float4 pixelL = read_imagef(inTexture, smp, coordL);\n"
+            + "    float4 pixelR = read_imagef(inTexture, smp, coordR);\n"
+            + "    float4 pixelT = read_imagef(inTexture, smp, coordT);\n"
+            + "    float4 pixelBo = read_imagef(inTexture, smp, coordBo);\n"
+            + "    float4 pixelF = read_imagef(inTexture, smp, coordF);\n"
+            + "    float4 pixelBa = read_imagef(inTexture, smp, coordBa);\n"
+            + "    pixel.x = (pixelR.x - pixelL.x); \n"
+            + "    if (pixel.x  < 0.0) {pixel.x = -pixel.x;} \n"
+            + "    pixel.y = pixelT.x - pixelBo.x; \n"
+            + "    if (pixel.y  < 0.0) {pixel.y = -pixel.y;} \n"
+            + "    pixel.z = pixelF.x - pixelBa.x; \n"
+            + "    if (pixel.z  < 0.0) {pixel.z = -pixel.z;} \n"
             + "    write_imagef(outTexture, coord, pixel);\n"
             + "}";
 
@@ -93,7 +113,7 @@ public class Main {
     private boolean syncGLtoCL; // true if we can make GL wait on events generated from CL queues.
     private final boolean doublePrecision = true;  //doubles used instead of floats
     private final boolean useTextures = true;  //for something...
-    private final PointerBuffer kernel2DGlobalWorkSize = BufferUtils.createPointerBuffer(2);  //the global work size of the kernel
+    private final PointerBuffer kernel2DGlobalWorkSize = BufferUtils.createPointerBuffer(3);  //the global work size of the kernel
     private final PointerBuffer syncBuffer = BufferUtils.createPointerBuffer(1);  //buffer for dealing with gl cl sync
     private int deviceType = CL10.CL_DEVICE_TYPE_GPU;
     private int slices;  //dividing up the image for faster processing
@@ -104,14 +124,6 @@ public class Main {
     }
 
     public static void main(String... args) throws Exception {
-        //IMAGE FILE
-        String imgDir = "C:\\Users\\labramson\\Documents\\Tutorial\\res\\";
-        String imgName = "texture.png";
-        String imgName2 = "blank.jpg";
-        //CREATE IMAGE OBJECT
-        img = new Image(imgDir + "" + imgName);
-        img2 = new Image(imgDir + "" + imgName2);
-
         //INIT DISPLAY & GL CONTEXT
         initDisplay();
         initGL();
@@ -123,8 +135,8 @@ public class Main {
         run.initCL();
 
         //CREATE THE TEXTURE IN GL CONTEXT
-        run.initGLTexture(img);
-        run.initWritableTexture(img2);
+        run.initGLTexture();
+        run.initWritableTexture();
 
         //COMPLETE ALL GL
         glFinish();
@@ -135,7 +147,7 @@ public class Main {
         //DISPLAY LOOP
         while (!Display.isCloseRequested()) {
             //ALLOWS DISPLAYING ON SCREEN
-            run.display(img);
+            run.display();
 
             //IF ESC THEN CLOSE
             if (Keyboard.isKeyDown(Keyboard.KEY_ESCAPE)) {
@@ -166,7 +178,7 @@ public class Main {
     public static void initGL() {
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        glOrtho(0, 300, 300, 0, 1, -1);
+        glOrtho(0, 300, 300, 0, 10, -300);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
     }
@@ -174,13 +186,13 @@ public class Main {
     //GL SETTINGS FOR THE TEXTURE
     public static void glSettings() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //CLEARS SCREEN EACH LOOP
-        glDisable(GL_DEPTH_TEST); //DISABLES DEPTH TEST
-        glEnable(GL_TEXTURE_2D); //ENABLES GL_TEXTURE_2D
+        glEnable(GL_DEPTH_TEST); //DISABLES DEPTH TEST
+        glEnable(GL_TEXTURE_3D); //ENABLES GL_TEXTURE_3D
         glPixelStorei(GL_PACK_ALIGNMENT, 4);
     }
 
     //INITIALIZE THE GL TEXTURE
-    public void initGLTexture(Image img) {
+    public void initGLTexture() throws Exception {
         if (glBuffers == null) {
             glBuffers = new CLMem[slices];
 
@@ -200,15 +212,37 @@ public class Main {
         if (useTextures) {
             GL11.glGenTextures(glIDs);
             for (int i = 0; i < slices; i++) {
-                Texture texture = new Texture(img, GL_TEXTURE_2D, glIDs.get(i));
-                glBuffers[i] = CL10GL.clCreateFromGLTexture2D(context, CL10.CL_MEM_READ_ONLY, texture.getTarget(), 0, texture.getId(), null);
+                ByteBuffer bbuf = BufferUtil.newByteBuffer(64 * 64 * 64 * 2);
+                ShortBuffer sbuf = bbuf.asShortBuffer();
+                for (int z=0; z<64; z++) {
+                    for (int y=0; y<64; y++) {
+                        for (int x=0; x<64; x++) {
+                            short value = 0;
+                            if ( x>16 && x<50 && y>16 && y<50 && z>16 && z<50) {
+                                value = 32767;
+                            }
+                            else if ( x>18 && x<48 && y>18 && y<48 && z>18 && z<48) {
+                                value = 128;
+                            }
+                            sbuf.put(value);
+                        }
+                    }
+                }
+               
+             
+                bbuf.flip();
+                bbuf.order(ByteOrder.LITTLE_ENDIAN);
+                
+                Texture texture = new Texture(64, 64, 64, GL_R16F, bbuf);
+                glBuffers[i] = CL10GL.clCreateFromGLTexture3D(context, CL10.CL_MEM_READ_ONLY, texture.getTarget(), 0, texture.getId(), null);
                 inTexture = texture;
             }
-            glBindTexture(GL_TEXTURE_2D, 0);
+            //UNBINDS THE TEXTURE
+            glBindTexture(GL_TEXTURE_3D, 0);
         }
     }
 
-    public void initWritableTexture(Image img) {
+    public void initWritableTexture() throws Exception {
         if (glBuffersOut == null) {
             glBuffersOut = new CLMem[slices];
 
@@ -228,11 +262,11 @@ public class Main {
         if (useTextures) {
             GL11.glGenTextures(glIDs2);
             for (int i = 0; i < slices; i++) {
-                Texture texture = new Texture(img, GL_TEXTURE_2D, glIDs2.get(i));
-                glBuffersOut[i] = CL10GL.clCreateFromGLTexture2D(context, CL10.CL_MEM_WRITE_ONLY, texture.getTarget(), 0, texture.getId(), null);
+                Texture texture = new Texture(64, 64, 64, GL_RGBA16F, null);
+                glBuffersOut[i] = CL10GL.clCreateFromGLTexture3D(context, CL10.CL_MEM_WRITE_ONLY, texture.getTarget(), 0, texture.getId(), null);
                 outTexture = texture;
             }
-            glBindTexture(GL_TEXTURE_2D, 0);
+            glBindTexture(GL_TEXTURE_3D, 0);
         }
         buffersInitialized = true;
     }
@@ -255,6 +289,7 @@ public class Main {
             final Filter<CLDevice> glSharingFilter;
             glSharingFilter = (final CLDevice device) -> {
                 final CLDeviceCapabilities abilities = CLCapabilities.getDeviceCapabilities(device);
+                System.out.println(abilities.CL_KHR_3d_image_writes);
                 return abilities.CL_KHR_gl_sharing;
             };
 
@@ -291,7 +326,7 @@ public class Main {
             //CHECK SYNC STATUS BTWN GL & CL
             syncStatus(context);
 
-        } catch (Exception e) {
+        } catch (RuntimeException | LWJGLException e) {
             System.out.println("*** Problem creating CL context");
             e.printStackTrace();
         }
@@ -307,7 +342,7 @@ public class Main {
         }
 
         for (int i = 0; i < programs.length; i++) {
-            programs[i] = CL10.clCreateProgramWithSource(context, code, null);
+            programs[i] = CL10.clCreateProgramWithSource(context, kernel_3DImage, null);
         }
 
         for (int i = 0; i < programs.length; i++) {
@@ -390,7 +425,7 @@ public class Main {
     }
 
     //DISPLAYS THE RESULTS
-    public void display(Image img) {
+    public void display() throws Exception {
         //CHECKS TO MAKE SURE ALL GL EVENTS HAVE COMPLETED
         if (syncCLtoGL && glEvent != null) {
             for (final CLCommandQueue queue : queues) {
@@ -402,7 +437,7 @@ public class Main {
 
         //IF THE GL TEXTURE BUFFERS HAVE NOT BEEN INITIALIZED
         if (!buffersInitialized) {
-            initGLTexture(img);
+            initGLTexture();
             setKernelParams();
         }
 
@@ -413,7 +448,7 @@ public class Main {
         }
 
         //SETS THE WORKSIZE OF THE KERNEL
-        kernel2DGlobalWorkSize.put(0, img.getWidth()).put(1, img.getHeight());
+        kernel2DGlobalWorkSize.put(0, 64).put(1, 64).put(2, 64);
 
         //GETS THE GL OBJECTS 
         for (int i = 0; i < slices; i++) {
@@ -421,7 +456,7 @@ public class Main {
             clEnqueueAcquireGLObjects(queues[i], glBuffers[i], null, null);
             clEnqueueAcquireGLObjects(queues[i], glBuffersOut[i], null, null);
 
-            clEnqueueNDRangeKernel(queues[i], kernels[i], 2,
+            clEnqueueNDRangeKernel(queues[i], kernels[i], 3,
                     null,
                     kernel2DGlobalWorkSize,
                     null,
@@ -443,10 +478,10 @@ public class Main {
         }
 
         //RENDER THE TEXTURE
-        render(img);
+        render();
     }
 
-    private void render(Image img) {
+    private void render() {
         if (syncGLtoCL) {
             for (int i = 0; i < slices; i++) {
                 glWaitSync(clSyncs[i], 0, 0);
@@ -454,33 +489,100 @@ public class Main {
         }
 
         //draw slices
-        int sliceWidth = img.getWidth() / slices;
+        //int sliceWidth = texture.getWidth() / slices;
 
         for (int i = 0; i < slices; i++) {
-            int seperatorOffset = drawSeparator ? i : 0;
-
-            //BIND THE TEXTURE
-            glBindTexture(GL_TEXTURE_2D, outTexture.getId());
-
+            //int seperatorOffset = drawSeparator ? i : 0;
+            
             //SETS GL SETTINGS
             glSettings();
 
-            //DRAW A SQUARE WITH MAPPED TEXTURE
+            //BIND THE TEXTURE
+            glEnable(GL_TEXTURE_3D);
+            glBindTexture(GL_TEXTURE_3D, outTexture.getId());
+
+            //DRAW A CUBE WITH MAPPED TEXTURE
             glBegin(GL_QUADS);
-            glTexCoord2f(0, 0);
-            glVertex2i(100, 100); //upper left
-
-            glTexCoord2f(0, 1);
-            glVertex2i(100, 200); //upper right
-
-            glTexCoord2f(1, 1);
-            glVertex2i(200, 200); //bottom right
-
-            glTexCoord2f(1, 0);
-            glVertex2i(200, 100); //bottom left
+              //System.out.println("Drawing front");
+            glTexCoord3f(0f, 0f, 0.5f);
+            glVertex3f(100, 100, 0); //upper left
+            glTexCoord3f(0f, 1.0f, 0.5f);
+            glVertex3f(100, 200, 0);  //upper right
+            glTexCoord3f(1.0f, 1.0f, 0.5f);
+            glVertex3f(200, 200, 0); //bottom right
+            glTexCoord3f(1.0f, 0f, 0.5f);
+            glVertex3f(200, 100, 0); //bottom left
             
-            
+//            // Top-face
+//            System.out.println("Drawing top");
+//            glTexCoord3f(0f, 0f, 0f);
+//            glVertex3f(1.0f, 1.0f, -1.0f);
+//            glTexCoord3f(0f, 1.0f, 0f);
+//            glVertex3f(-1.0f, 1.0f, -1.0f);
+//            glTexCoord3f(1.0f, 1.0f, 0f);
+//            glVertex3f(-1.0f, 1.0f, 1.0f);
+//            glTexCoord3f(1.0f, 0f, 0f);
+//            glVertex3f(1.0f, 1.0f, 1.0f);
+//             
+//            // Bottom-face
+//            System.out.println("Drawing bottom");
+//            glTexCoord3f(0f, 0f, 0f);
+//            glVertex3f(1.0f, -1.0f, 1.0f);
+//            glTexCoord3f(0f, 1.0f, 0f);
+//            glVertex3f(-1.0f, -1.0f, 1.0f);
+//            glTexCoord3f(1.0f, 1.0f, 0f);
+//            glVertex3f(-1.0f, -1.0f, -1.0f);
+//            glTexCoord3f(1.0f, 0f, 0f);
+//            glVertex3f(1.0f, -1.0f, -1.0f);
+//
+//            // Front-face
+//            System.out.println("Drawing front");
+//            glTexCoord3f(0f, 0f, 0f);
+//            glVertex3f(1.0f, 1.0f, 1.0f);
+//            glTexCoord3f(0f, 1.0f, 0f);
+//            glVertex3f(-1.0f, 1.0f, 1.0f);
+//            glTexCoord3f(1.0f, 1.0f, 0f);
+//            glVertex3f(-1.0f, -1.0f, 1.0f);
+//            glTexCoord3f(1.0f, 0f, 0f);
+//            glVertex3f(1.0f, -1.0f, 1.0f);
+//
+//            // Back-face
+//            System.out.println("Drawing back");
+//            glTexCoord3f(0f, 0f, 0f);
+//            glVertex3f(1.0f, -1.0f, -1.0f);
+//            glTexCoord3f(0f, 1.0f, 0f);
+//            glVertex3f(-1.0f, -1.0f, -1.0f);
+//            glTexCoord3f(1.0f, 1.0f, 0f);
+//            glVertex3f(-1.0f, 1.0f, -1.0f);
+//             glTexCoord3f(1.0f, 0f, 0f);
+//            glVertex3f(1.0f, 1.0f, -1.0f);
+//
+//            // Left-face
+//            System.out.println("Drawing left");
+//            glTexCoord3f(0f, 0f, 0f);
+//            glVertex3f(-1.0f, 1.0f, 1.0f);
+//            glTexCoord3f(0f, 1.0f, 0f);
+//            glVertex3f(-1.0f, 1.0f, -1.0f);
+//            glTexCoord3f(1.0f, 1.0f, 0f);
+//            glVertex3f(-1.0f, -1.0f, -1.0f);
+//            glTexCoord3f(1.0f, 0f, 0f);
+//            glVertex3f(-1.0f, -1.0f, 1.0f);
+//
+//            // Right-face
+//            System.out.println("Drawing right");
+//            glTexCoord3f(0f, 0f, 0f);
+//            glVertex3f(1.0f, 1.0f, -1.0f);
+//            glTexCoord3f(0f, 1.0f, 0f);
+//            glVertex3f(1.0f, 1.0f, 1.0f);
+//            glTexCoord3f(1.0f, 1.0f, 0f);
+//            glVertex3f(1.0f, -1.0f, 1.0f);
+//            glTexCoord3f(1.0f, 0f, 0f);
+//            glVertex3f(1.0f, -1.0f, -1.0f);
+
             glEnd();
+            
+            glBindTexture(GL_TEXTURE_3D, 0);
+            glDisable(GL_TEXTURE_3D);
         }
 
         //CHECKING SYNC
