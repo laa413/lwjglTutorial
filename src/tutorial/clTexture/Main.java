@@ -467,15 +467,6 @@ public class Main {
 
             //DRAW A SQUARE WITH MAPPED TEXTURE
             glBegin(GL_QUADS);
-            glTexCoord3f(0f, 0f, 1f);
-            glVertex3i(100, 100,0);
-            glTexCoord3f(0f, 1.0f, 1f);
-            glVertex3i(-100, 100, 0);
-            glTexCoord3f(1.0f, 1.0f, 1f);
-            glVertex3i(-100, -100, 0);
-            glTexCoord3f(1.0f, 0f, 1f);
-            glVertex3i(100, -100, 0);
-            
             glTexCoord2f(0, 0);
             glVertex2i(100, 100); //upper left
 
