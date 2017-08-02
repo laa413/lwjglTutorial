@@ -5,10 +5,15 @@
  */
 package tutorial.clTexture3d;
 
+import java.nio.ByteBuffer;
+import static org.lwjgl.opengl.ARBTextureRg.GL_R16;
+import static org.lwjgl.opengl.ARBTextureRg.GL_R16F;
 import org.lwjgl.opengl.GL11;
 import static org.lwjgl.opengl.GL11.GL_NEAREST;
+import static org.lwjgl.opengl.GL11.GL_RED;
 import static org.lwjgl.opengl.GL11.GL_RGB;
 import static org.lwjgl.opengl.GL11.GL_RGB8;
+import static org.lwjgl.opengl.GL11.GL_RGBA;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_2D;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_MAG_FILTER;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_MIN_FILTER;
@@ -20,23 +25,21 @@ import static org.lwjgl.opengl.GL11.glTexParameteri;
 import static org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE;
 import static org.lwjgl.opengl.GL12.GL_TEXTURE_3D;
 import static org.lwjgl.opengl.GL12.glTexImage3D;
+import static org.lwjgl.opengl.GL30.GL_RGBA16F;
 
 /*
  * @author LAA
  */
 public class Texture {
+    private int width, height, depth, target, id;
 
-    private final int width, height, depth, target, id;
-    private final Image image;
-
-    public Texture(Image image, int target, int id) {
-        this.image = image;
-        this.width = image.getWidth();
-        this.height = image.getHeight();
-        this.depth = 20;
-        this.target = target;
-        this.id = id;
-
+    public Texture(int width, int height, int depth, int colorFormat, ByteBuffer buff) throws Exception {
+        this.width = width;
+        this.height = height;
+        this.depth = depth;
+        this.target = GL_TEXTURE_3D;
+        this.id = GL11.glGenTextures();
+        
         // bind this texture 
         GL11.glBindTexture(target, id);
 
@@ -46,7 +49,19 @@ public class Texture {
         glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
        // glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, image.getWidth() + 1, image.getHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, image.getByeBuff());
-        glTexImage3D(target, 0, GL_RGB8, image.getWidth() + 1, image.getHeight(), depth, 0, GL_RGB, GL_UNSIGNED_BYTE, image.getByeBuff());
+       switch (colorFormat){
+           case GL_RGB8:
+               glTexImage3D(target, 0, colorFormat, width, height, depth, 0, GL_RGB, GL_UNSIGNED_BYTE, buff);
+               break;
+           case GL_RGBA16F:
+               glTexImage3D(target, 0, colorFormat, width, height, depth, 0, GL_RGBA, GL_UNSIGNED_BYTE, buff);
+               break;
+           case GL_R16F:
+               glTexImage3D(target, 0, colorFormat, width, height, depth, 0, GL_RED, GL_UNSIGNED_BYTE, buff);
+               break;
+           default:
+               throw new Exception("Unrecognized texture color format: " + colorFormat);
+       }
     }
 
     public void bind() {
@@ -55,10 +70,6 @@ public class Texture {
 
     public int getTarget() {
         return target;
-    }
-
-    public Image getImage() {
-        return image;
     }
 
     public int getId() {
@@ -71,5 +82,9 @@ public class Texture {
 
     public int getHeight() {
         return height;
+    }
+    
+    public int getDepth(){
+        return depth;
     }
 }

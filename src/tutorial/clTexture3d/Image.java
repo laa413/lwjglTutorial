@@ -20,8 +20,7 @@ import javax.imageio.ImageIO;
  * @author LAA
  */
 public class Image {
-
-    private final int width, height;
+    private final int width, height, depth;
     private final BufferedImage img;
 
     /* The color model including alpha for the GL image */
@@ -33,13 +32,14 @@ public class Image {
         this.img = getBuffImage(imgFile);
         this.width = img.getWidth();
         this.height = img.getHeight();
+        this.depth = getDepth();
+        
         this.glAlphaColorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB),
                 new int[]{8, 8, 8, 8},
                 true,
                 false,
                 ComponentColorModel.TRANSLUCENT,
                 DataBuffer.TYPE_BYTE);
-
         this.glColorModel = new ComponentColorModel(ColorSpace.getInstance(ColorSpace.CS_sRGB),
                 new int[]{8, 8, 8, 0},
                 false,
@@ -72,7 +72,6 @@ public class Image {
             texImage = new BufferedImage(glAlphaColorModel, raster, false, new Hashtable());
         } else {
             raster = Raster.createInterleavedRaster(DataBuffer.TYPE_BYTE, this.img.getWidth() + 1, this.img.getHeight(), 3, null);
-            
             texImage = new BufferedImage(glColorModel, raster, false, new Hashtable());
         }
 
@@ -81,7 +80,6 @@ public class Image {
         g.setColor(new Color(0f, 0f, 0f, 0f));
         g.fillRect(0, 0, this.img.getWidth() + 1, this.img.getHeight());
         g.drawImage(this.img, 0, 0, null);
-        g.fill3DRect(0, 0, width, height, true);
 
         // build a byte buffer from the temporary image to produce a texture
         byte[] data = ((DataBufferByte) texImage.getRaster().getDataBuffer()).getData();
@@ -100,6 +98,10 @@ public class Image {
 
     public int getHeight() {
         return height;
+    }
+    
+    public int getDepth(){
+        return depth;
     }
 
     public BufferedImage getImg() {
