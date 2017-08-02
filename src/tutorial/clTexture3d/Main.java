@@ -27,6 +27,7 @@ import org.lwjgl.opencl.api.Filter;
 import org.lwjgl.opengl.*;
 import static java.lang.Math.min;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.ShortBuffer;
 import static org.lwjgl.opencl.CL10.CL_PROGRAM_BUILD_LOG;
 import static org.lwjgl.opencl.CL10.CL_QUEUE_PROFILING_ENABLE;
@@ -40,19 +41,21 @@ import static org.lwjgl.opengl.ARBCLEvent.glCreateSyncFromCLeventARB;
 import static org.lwjgl.opengl.ARBSync.GL_SYNC_GPU_COMMANDS_COMPLETE;
 import static org.lwjgl.opengl.ARBSync.glFenceSync;
 import static org.lwjgl.opengl.ARBSync.glWaitSync;
+import static org.lwjgl.opengl.ARBTextureRg.GL_R16;
 import static org.lwjgl.opengl.ARBTextureRg.GL_R16F;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
 //import static org.lwjgl.opengl.GL15.glBindBuffer;
 import static org.lwjgl.opengl.GL15.glDeleteBuffers;
+import static org.lwjgl.opengl.GL30.GL_RGBA16F;
 //import static org.lwjgl.opengl.GL21.GL_PIXEL_UNPACK_BUFFER;
 
 /*
  * @author labramson
  */
 public class Main {
-    public static Image img;
-    public static Image img2;
+    //public static Image img;
+    //public static Image img2;
     private Texture inTexture, outTexture;
 
     static final String kernel_Sample
@@ -67,14 +70,26 @@ public class Main {
             = "kernel void imgTest2(__read_only image3d_t inTexture, __write_only image3d_t outTexture){\n"
             + "    #pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable\n"
             + "    const sampler_t smp =  CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;\n\n"
-            + "    uint offset = get_global_id(1)*0x4000 + get_global_id(0)*0x1000;\n"
             + "    int4 coord = (int4)(get_global_id(0), get_global_id(1), get_global_id(2), 0);\n"
+            + "    int4 coordL = (int4)(get_global_id(0)-1, get_global_id(1), get_global_id(2), 0);\n"
+            + "    int4 coordR = (int4)(get_global_id(0)+1, get_global_id(1), get_global_id(2), 0);\n"
+            + "    int4 coordT = (int4)(get_global_id(0), get_global_id(1)-1, get_global_id(2), 0);\n"
+            + "    int4 coordBo = (int4)(get_global_id(0), get_global_id(1)+1, get_global_id(2), 0);\n"
+            + "    int4 coordF = (int4)(get_global_id(0), get_global_id(1), get_global_id(2)-1, 0);\n"
+            + "    int4 coordBa = (int4)(get_global_id(0), get_global_id(1), get_global_id(2)-1, 0);\n"
             + "    float4 pixel = read_imagef(inTexture, smp, coord);\n"
-            + "    //if  (coord.x > 5 & coord.y > 5) { \n"
-            + "        pixel.x = 1.0;\n"
-            + "       // pixel.y -= 1.5;\n"
-            + "       // pixel.z -= 1.5;\n"
-            + "    //}\n"
+            + "    float4 pixelL = read_imagef(inTexture, smp, coordL);\n"
+            + "    float4 pixelR = read_imagef(inTexture, smp, coordR);\n"
+            + "    float4 pixelT = read_imagef(inTexture, smp, coordT);\n"
+            + "    float4 pixelBo = read_imagef(inTexture, smp, coordBo);\n"
+            + "    float4 pixelF = read_imagef(inTexture, smp, coordF);\n"
+            + "    float4 pixelBa = read_imagef(inTexture, smp, coordBa);\n"
+            + "    pixel.x = (pixelR.x - pixelL.x); \n"
+            + "    if (pixel.x  < 0.0) {pixel.x = -pixel.x;} \n"
+            + "    pixel.y = pixelT.x - pixelBo.x; \n"
+            + "    if (pixel.y  < 0.0) {pixel.y = -pixel.y;} \n"
+            + "    pixel.z = pixelF.x - pixelBa.x; \n"
+            + "    if (pixel.z  < 0.0) {pixel.z = -pixel.z;} \n"
             + "    write_imagef(outTexture, coord, pixel);\n"
             + "}";
 
@@ -109,14 +124,6 @@ public class Main {
     }
 
     public static void main(String... args) throws Exception {
-        //IMAGE FILE
-        String imgDir = "C:\\Users\\labramson\\Documents\\Tutorial\\res\\";
-        String imgName = "texture.png";
-        String imgName2 = "blank.jpg";
-        //CREATE IMAGE OBJECT
-        img = new Image(imgDir + "" + imgName);
-        img2 = new Image(imgDir + "" + imgName2);
-
         //INIT DISPLAY & GL CONTEXT
         initDisplay();
         initGL();
@@ -128,8 +135,8 @@ public class Main {
         run.initCL();
 
         //CREATE THE TEXTURE IN GL CONTEXT
-        run.initGLTexture(img);
-        run.initWritableTexture(img2);
+        run.initGLTexture();
+        run.initWritableTexture();
 
         //COMPLETE ALL GL
         glFinish();
@@ -140,7 +147,7 @@ public class Main {
         //DISPLAY LOOP
         while (!Display.isCloseRequested()) {
             //ALLOWS DISPLAYING ON SCREEN
-            run.display(img);
+            run.display();
 
             //IF ESC THEN CLOSE
             if (Keyboard.isKeyDown(Keyboard.KEY_ESCAPE)) {
@@ -171,7 +178,7 @@ public class Main {
     public static void initGL() {
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        glOrtho(0, 300, 300, 0, 5, -5);
+        glOrtho(0, 300, 300, 0, 10, -300);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
     }
@@ -185,7 +192,7 @@ public class Main {
     }
 
     //INITIALIZE THE GL TEXTURE
-    public void initGLTexture(Image img) throws Exception {
+    public void initGLTexture() throws Exception {
         if (glBuffers == null) {
             glBuffers = new CLMem[slices];
 
@@ -207,31 +214,35 @@ public class Main {
             for (int i = 0; i < slices; i++) {
                 ByteBuffer bbuf = BufferUtil.newByteBuffer(64 * 64 * 64 * 2);
                 ShortBuffer sbuf = bbuf.asShortBuffer();
-                for (int x=0; x<64; x++) {
+                for (int z=0; z<64; z++) {
                     for (int y=0; y<64; y++) {
-                        for (int z=0; z<64; z++) {
-                            
+                        for (int x=0; x<64; x++) {
                             short value = 0;
-                            if (x>16 && x<50 && y>16 && y<50) {
+                            if ( x>16 && x<50 && y>16 && y<50 && z>16 && z<50) {
+                                value = 32767;
+                            }
+                            else if ( x>18 && x<48 && y>18 && y<48 && z>18 && z<48) {
                                 value = 128;
                             }
                             sbuf.put(value);
                         }
                     }
                 }
-                
+               
+             
                 bbuf.flip();
-                
+                bbuf.order(ByteOrder.LITTLE_ENDIAN);
                 
                 Texture texture = new Texture(64, 64, 64, GL_R16F, bbuf);
                 glBuffers[i] = CL10GL.clCreateFromGLTexture3D(context, CL10.CL_MEM_READ_ONLY, texture.getTarget(), 0, texture.getId(), null);
                 inTexture = texture;
             }
+            //UNBINDS THE TEXTURE
             glBindTexture(GL_TEXTURE_3D, 0);
         }
     }
 
-    public void initWritableTexture(Image img) throws Exception {
+    public void initWritableTexture() throws Exception {
         if (glBuffersOut == null) {
             glBuffersOut = new CLMem[slices];
 
@@ -251,7 +262,7 @@ public class Main {
         if (useTextures) {
             GL11.glGenTextures(glIDs2);
             for (int i = 0; i < slices; i++) {
-                Texture texture = new Texture(64, 64, 64, GL_R16F, null);
+                Texture texture = new Texture(64, 64, 64, GL_RGBA16F, null);
                 glBuffersOut[i] = CL10GL.clCreateFromGLTexture3D(context, CL10.CL_MEM_WRITE_ONLY, texture.getTarget(), 0, texture.getId(), null);
                 outTexture = texture;
             }
@@ -414,7 +425,7 @@ public class Main {
     }
 
     //DISPLAYS THE RESULTS
-    public void display(Image img) throws Exception {
+    public void display() throws Exception {
         //CHECKS TO MAKE SURE ALL GL EVENTS HAVE COMPLETED
         if (syncCLtoGL && glEvent != null) {
             for (final CLCommandQueue queue : queues) {
@@ -426,7 +437,7 @@ public class Main {
 
         //IF THE GL TEXTURE BUFFERS HAVE NOT BEEN INITIALIZED
         if (!buffersInitialized) {
-            initGLTexture(img);
+            initGLTexture();
             setKernelParams();
         }
 
@@ -462,17 +473,15 @@ public class Main {
         // block until done (important: finish before doing further gl work)
         if (!syncGLtoCL) {
             for (int i = 0; i < slices; i++) {
-                System.out.println("I: " + i);
-                System.out.println("q: " + queues[i].isValid());
                 clFinish(queues[i]);
             }
         }
 
         //RENDER THE TEXTURE
-        render(img);
+        render();
     }
 
-    private void render(Image img) {
+    private void render() {
         if (syncGLtoCL) {
             for (int i = 0; i < slices; i++) {
                 glWaitSync(clSyncs[i], 0, 0);
@@ -480,10 +489,10 @@ public class Main {
         }
 
         //draw slices
-        int sliceWidth = img.getWidth() / slices;
+        //int sliceWidth = texture.getWidth() / slices;
 
         for (int i = 0; i < slices; i++) {
-            int seperatorOffset = drawSeparator ? i : 0;
+            //int seperatorOffset = drawSeparator ? i : 0;
             
             //SETS GL SETTINGS
             glSettings();
@@ -494,18 +503,15 @@ public class Main {
 
             //DRAW A CUBE WITH MAPPED TEXTURE
             glBegin(GL_QUADS);
-            
-            glTexCoord2f(0, 0);
-            glVertex2i(100, 100); //upper left
-
-            glTexCoord2f(0, 1);
-            glVertex2i(100, 200); //upper right
-
-            glTexCoord2f(1, 1);
-            glVertex2i(200, 200); //bottom right
-
-            glTexCoord2f(1, 0);
-            glVertex2i(200, 100); //bottom left
+              //System.out.println("Drawing front");
+            glTexCoord3f(0f, 0f, 0.5f);
+            glVertex3f(100, 100, 0); //upper left
+            glTexCoord3f(0f, 1.0f, 0.5f);
+            glVertex3f(100, 200, 0);  //upper right
+            glTexCoord3f(1.0f, 1.0f, 0.5f);
+            glVertex3f(200, 200, 0); //bottom right
+            glTexCoord3f(1.0f, 0f, 0.5f);
+            glVertex3f(200, 100, 0); //bottom left
             
 //            // Top-face
 //            System.out.println("Drawing top");

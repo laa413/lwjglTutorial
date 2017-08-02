@@ -6,6 +6,7 @@
 package tutorial.clTexture3d;
 
 import java.nio.ByteBuffer;
+import java.nio.ShortBuffer;
 import static org.lwjgl.opengl.ARBTextureRg.GL_R16;
 import static org.lwjgl.opengl.ARBTextureRg.GL_R16F;
 import org.lwjgl.opengl.GL11;
@@ -14,6 +15,7 @@ import static org.lwjgl.opengl.GL11.GL_RED;
 import static org.lwjgl.opengl.GL11.GL_RGB;
 import static org.lwjgl.opengl.GL11.GL_RGB8;
 import static org.lwjgl.opengl.GL11.GL_RGBA;
+import static org.lwjgl.opengl.GL11.GL_SHORT;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_2D;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_MAG_FILTER;
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_MIN_FILTER;
@@ -51,13 +53,17 @@ public class Texture {
        // glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, image.getWidth() + 1, image.getHeight(), 0, GL_RGB, GL_UNSIGNED_BYTE, image.getByeBuff());
        switch (colorFormat){
            case GL_RGB8:
+               //glTexImage3D();
                glTexImage3D(target, 0, colorFormat, width, height, depth, 0, GL_RGB, GL_UNSIGNED_BYTE, buff);
                break;
            case GL_RGBA16F:
                glTexImage3D(target, 0, colorFormat, width, height, depth, 0, GL_RGBA, GL_UNSIGNED_BYTE, buff);
                break;
            case GL_R16F:
-               glTexImage3D(target, 0, colorFormat, width, height, depth, 0, GL_RED, GL_UNSIGNED_BYTE, buff);
+               glTexImage3D(target, 0, colorFormat, width, height, depth, 0, GL_RED, GL_SHORT, buff);
+               break;
+           case GL_R16:
+               glTexImage3D(target, 0, colorFormat, width, height, depth, 0, GL_RED, GL_SHORT, buff);
                break;
            default:
                throw new Exception("Unrecognized texture color format: " + colorFormat);
