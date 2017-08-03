@@ -106,7 +106,7 @@ public class Main {
     public static void main(String... args) throws Exception {
         //IMAGE FILE
         String imgDir = "C:\\Users\\labramson\\Documents\\Tutorial\\res\\";
-        String imgName = "texture.png";
+        String imgName = "smileTexture.jpg";
         String imgName2 = "blank.jpg";
         //CREATE IMAGE OBJECT
         img = new Image(imgDir + "" + imgName);

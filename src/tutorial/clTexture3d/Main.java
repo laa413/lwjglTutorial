@@ -41,7 +41,6 @@ import static org.lwjgl.opengl.ARBCLEvent.glCreateSyncFromCLeventARB;
 import static org.lwjgl.opengl.ARBSync.GL_SYNC_GPU_COMMANDS_COMPLETE;
 import static org.lwjgl.opengl.ARBSync.glFenceSync;
 import static org.lwjgl.opengl.ARBSync.glWaitSync;
-import static org.lwjgl.opengl.ARBTextureRg.GL_R16;
 import static org.lwjgl.opengl.ARBTextureRg.GL_R16F;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
@@ -57,41 +56,6 @@ public class Main {
     //public static Image img;
     //public static Image img2;
     private Texture inTexture, outTexture;
-
-    static final String kernel_Sample
-            = "kernel void imgTest(__read_only image2d_t inputTexture){\n"
-            + "    int2 imgCoords = (int2)(get_global_id(0), get_global_id(1));\n"
-            + "    //printf(\"Coord x:%d Coord y:%d \", imgCoords.x, imgCoords.y);\n\n"
-            + "    const sampler_t smp =  CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;\n\n"
-            + "    float4 imgVal = read_imagef(inputTexture, smp, imgCoords); \n"
-            + "    printf(\"(%d, %d) RGBA(%f, %f, %f, %f)\\n\", imgCoords.x, imgCoords.y, imgVal.x, imgVal.y, imgVal.z, imgVal.w);\n"
-            + "}";
-    static final String kernel_3DImage
-            = "kernel void imgTest2(__read_only image3d_t inTexture, __write_only image3d_t outTexture){\n"
-            + "    #pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable\n"
-            + "    const sampler_t smp =  CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;\n\n"
-            + "    int4 coord = (int4)(get_global_id(0), get_global_id(1), get_global_id(2), 0);\n"
-            + "    int4 coordL = (int4)(get_global_id(0)-1, get_global_id(1), get_global_id(2), 0);\n"
-            + "    int4 coordR = (int4)(get_global_id(0)+1, get_global_id(1), get_global_id(2), 0);\n"
-            + "    int4 coordT = (int4)(get_global_id(0), get_global_id(1)-1, get_global_id(2), 0);\n"
-            + "    int4 coordBo = (int4)(get_global_id(0), get_global_id(1)+1, get_global_id(2), 0);\n"
-            + "    int4 coordF = (int4)(get_global_id(0), get_global_id(1), get_global_id(2)-1, 0);\n"
-            + "    int4 coordBa = (int4)(get_global_id(0), get_global_id(1), get_global_id(2)-1, 0);\n"
-            + "    float4 pixel = read_imagef(inTexture, smp, coord);\n"
-            + "    float4 pixelL = read_imagef(inTexture, smp, coordL);\n"
-            + "    float4 pixelR = read_imagef(inTexture, smp, coordR);\n"
-            + "    float4 pixelT = read_imagef(inTexture, smp, coordT);\n"
-            + "    float4 pixelBo = read_imagef(inTexture, smp, coordBo);\n"
-            + "    float4 pixelF = read_imagef(inTexture, smp, coordF);\n"
-            + "    float4 pixelBa = read_imagef(inTexture, smp, coordBa);\n"
-            + "    pixel.x = (pixelR.x - pixelL.x); \n"
-            + "    if (pixel.x  < 0.0) {pixel.x = -pixel.x;} \n"
-            + "    pixel.y = pixelT.x - pixelBo.x; \n"
-            + "    if (pixel.y  < 0.0) {pixel.y = -pixel.y;} \n"
-            + "    pixel.z = pixelF.x - pixelBa.x; \n"
-            + "    if (pixel.z  < 0.0) {pixel.z = -pixel.z;} \n"
-            + "    write_imagef(outTexture, coord, pixel);\n"
-            + "}";
 
     //VARS FOR CL CONVERSION
     private CLCommandQueue[] queues;  //array of cl command queues
@@ -118,6 +82,50 @@ public class Main {
     private int deviceType = CL10.CL_DEVICE_TYPE_GPU;
     private int slices;  //dividing up the image for faster processing
     private static final int MAX_GPUS = 8; //Max GPUs used at once
+    
+     static final String kernel_Sample
+            = "kernel void imgTest(__read_only image2d_t inputTexture){\n"
+            + "    int2 imgCoords = (int2)(get_global_id(0), get_global_id(1));\n"
+            + "    //printf(\"Coord x:%d Coord y:%d \", imgCoords.x, imgCoords.y);\n\n"
+            + "    const sampler_t smp =  CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;\n\n"
+            + "    float4 imgVal = read_imagef(inputTexture, smp, imgCoords); \n"
+            + "    printf(\"(%d, %d) RGBA(%f, %f, %f, %f)\\n\", imgCoords.x, imgCoords.y, imgVal.x, imgVal.y, imgVal.z, imgVal.w);\n"
+            + "}";
+    static final String kernel_3DImage
+            = "kernel void imgTest2(__read_only image3d_t inTexture, __write_only image3d_t outTexture){\n"
+            + "    #pragma OPENCL EXTENSION cl_khr_3d_image_writes : enable\n"
+            + "    const sampler_t smp =  CLK_NORMALIZED_COORDS_TRUE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;\n\n"
+            + "    int4 coordOffsets[27] = "
+            + "    {(int4)(-1,-1,-1,0), (int4)(-1,0,-1,0), (int4)(-1,1,-1,0),"
+            + "      (int4)(-1,-1,0,0), (int4)(-1,0,0,0), (int4)(-1,1,0,0),"
+            + "      (int4)(-1,-1,1,0), (int4)(-1,0,1,0), (int4)(-1,1,1,0),"
+            + "      (int4)(0,-1,-1,0), (int4)(0,0,-1,0), (int4)(0,1,-1,0),"
+            + "      (int4)(0,-1,0,0), (int4)(0,0,0,0), (int4)(0,1,0,0),"
+            + "      (int4)(0,-1,1,0), (int4)(0,0,1,0), (int4)(0,1,1,0),"
+            + "      (int4)(1,-1,-1,0), (int4)(1,0,-1,0), (int4)(1,1,-1,0),"
+            + "      (int4)(1,-1,0,0), (int4)(1,0,0,0), (int4)(1,1,0,0),"
+            + "      (int4)(1,-1,1,0), (int4)(1,0,1,0), (int4)(1,1,1,0)};\n"
+            + "    const float sqrt3 = native_sqrt(3)/3;\n"
+            + "    const float sqrt2 = native_sqrt(2)/2;\n"
+            + "    int4 weightsX[27] = {-sqrt3, -sqrt2, -sqrt3, -sqrt2, -1, "
+            + "      -sqrt2, -sqrt3, -sqrt2, -sqrt3, 0, 0, 0, 0, 0, 0, 0, 0, 0,\n" 
+            +"       sqrt3, sqrt2, sqrt3, sqrt2, 1, sqrt2, sqrt3, sqrt2, sqrt3};\n"
+            + "    int4 weightsY[27] = {-sqrt3, 0, sqrt3, -sqrt2, 0, sqrt2,-sqrt3, 0,"
+            + "      sqrt3, -sqrt2, 0, sqrt2, -1, 0, 1, -sqrt2, 0, sqrt2, -sqrt3, 0, "
+            + "      sqrt3, -sqrt2, 0, sqrt2, -sqrt3, 0, sqrt3};\n"
+            + "    int4 weightsZ[27] = {-sqrt3, -sqrt2, -sqrt3, 0, 0, 0, sqrt3, sqrt2,"
+            + "      sqrt3, -sqrt2, -1, -sqrt2, 0, 0, 0, sqrt2, 1, sqrt2, -sqrt3, -sqrt2,"
+            + "      -sqrt3, 0, 0, 0, sqrt3, sqrt2, sqrt3};\n"
+            + "    for(int i = 0; i<27; i++){"
+            + "       "
+            + "    }"
+            + "    float3 sobelX = pixelRD.xyz - pixelLD.xyz + 2.0f*(pixelR.xyz-pixelL.xyz) - pixelLU.xyz + pixelRU.xyz;\n"
+            + "    float3 sobely = -pixelRD.xyz - pixelLD.xyz + 2.0f*(pixelT.xyz-pixelBo.xyz) + pixelLU.xyz + pixelRU.xyz;\n"
+            + "    float3 normal = sobelX*sobelX + sobely*sobely;\n"
+            + "    float3 sobel = native_sqrt(normal.x + normal.y + normal.z);\n"
+            
+            + "    write_imagef(outTexture, coord, (float4)(sobel, 1.0f));\n"
+            + "}";
 
     //CONSTRUCTOR
     public Main() {
@@ -178,7 +186,7 @@ public class Main {
     public static void initGL() {
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        glOrtho(0, 300, 300, 0, 10, -300);
+        glOrtho(0, 300, 300, 0, 0, -300);
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
     }
@@ -498,12 +506,12 @@ public class Main {
             glSettings();
 
             //BIND THE TEXTURE
-            glEnable(GL_TEXTURE_3D);
             glBindTexture(GL_TEXTURE_3D, outTexture.getId());
 
             //DRAW A CUBE WITH MAPPED TEXTURE
             glBegin(GL_QUADS);
-              //System.out.println("Drawing front");
+            
+            //System.out.println("Drawing front");
             glTexCoord3f(0f, 0f, 0.5f);
             glVertex3f(100, 100, 0); //upper left
             glTexCoord3f(0f, 1.0f, 0.5f);
@@ -512,72 +520,6 @@ public class Main {
             glVertex3f(200, 200, 0); //bottom right
             glTexCoord3f(1.0f, 0f, 0.5f);
             glVertex3f(200, 100, 0); //bottom left
-            
-//            // Top-face
-//            System.out.println("Drawing top");
-//            glTexCoord3f(0f, 0f, 0f);
-//            glVertex3f(1.0f, 1.0f, -1.0f);
-//            glTexCoord3f(0f, 1.0f, 0f);
-//            glVertex3f(-1.0f, 1.0f, -1.0f);
-//            glTexCoord3f(1.0f, 1.0f, 0f);
-//            glVertex3f(-1.0f, 1.0f, 1.0f);
-//            glTexCoord3f(1.0f, 0f, 0f);
-//            glVertex3f(1.0f, 1.0f, 1.0f);
-//             
-//            // Bottom-face
-//            System.out.println("Drawing bottom");
-//            glTexCoord3f(0f, 0f, 0f);
-//            glVertex3f(1.0f, -1.0f, 1.0f);
-//            glTexCoord3f(0f, 1.0f, 0f);
-//            glVertex3f(-1.0f, -1.0f, 1.0f);
-//            glTexCoord3f(1.0f, 1.0f, 0f);
-//            glVertex3f(-1.0f, -1.0f, -1.0f);
-//            glTexCoord3f(1.0f, 0f, 0f);
-//            glVertex3f(1.0f, -1.0f, -1.0f);
-//
-//            // Front-face
-//            System.out.println("Drawing front");
-//            glTexCoord3f(0f, 0f, 0f);
-//            glVertex3f(1.0f, 1.0f, 1.0f);
-//            glTexCoord3f(0f, 1.0f, 0f);
-//            glVertex3f(-1.0f, 1.0f, 1.0f);
-//            glTexCoord3f(1.0f, 1.0f, 0f);
-//            glVertex3f(-1.0f, -1.0f, 1.0f);
-//            glTexCoord3f(1.0f, 0f, 0f);
-//            glVertex3f(1.0f, -1.0f, 1.0f);
-//
-//            // Back-face
-//            System.out.println("Drawing back");
-//            glTexCoord3f(0f, 0f, 0f);
-//            glVertex3f(1.0f, -1.0f, -1.0f);
-//            glTexCoord3f(0f, 1.0f, 0f);
-//            glVertex3f(-1.0f, -1.0f, -1.0f);
-//            glTexCoord3f(1.0f, 1.0f, 0f);
-//            glVertex3f(-1.0f, 1.0f, -1.0f);
-//             glTexCoord3f(1.0f, 0f, 0f);
-//            glVertex3f(1.0f, 1.0f, -1.0f);
-//
-//            // Left-face
-//            System.out.println("Drawing left");
-//            glTexCoord3f(0f, 0f, 0f);
-//            glVertex3f(-1.0f, 1.0f, 1.0f);
-//            glTexCoord3f(0f, 1.0f, 0f);
-//            glVertex3f(-1.0f, 1.0f, -1.0f);
-//            glTexCoord3f(1.0f, 1.0f, 0f);
-//            glVertex3f(-1.0f, -1.0f, -1.0f);
-//            glTexCoord3f(1.0f, 0f, 0f);
-//            glVertex3f(-1.0f, -1.0f, 1.0f);
-//
-//            // Right-face
-//            System.out.println("Drawing right");
-//            glTexCoord3f(0f, 0f, 0f);
-//            glVertex3f(1.0f, 1.0f, -1.0f);
-//            glTexCoord3f(0f, 1.0f, 0f);
-//            glVertex3f(1.0f, 1.0f, 1.0f);
-//            glTexCoord3f(1.0f, 1.0f, 0f);
-//            glVertex3f(1.0f, -1.0f, 1.0f);
-//            glTexCoord3f(1.0f, 0f, 0f);
-//            glVertex3f(1.0f, -1.0f, -1.0f);
 
             glEnd();
             
