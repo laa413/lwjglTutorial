@@ -29,6 +29,7 @@ import static java.lang.Math.min;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.ShortBuffer;
+import static org.lwjgl.opencl.CL10.CL_DEVICE_TYPE_GPU;
 import static org.lwjgl.opencl.CL10.CL_PROGRAM_BUILD_LOG;
 import static org.lwjgl.opencl.CL10.CL_QUEUE_PROFILING_ENABLE;
 import static org.lwjgl.opencl.CL10.clEnqueueNDRangeKernel;
@@ -301,13 +302,14 @@ public class Main {
 
             final Filter<CLDevice> glSharingFilter;
             glSharingFilter = (final CLDevice device) -> {
-                final CLDeviceCapabilities abilities = CLCapabilities.getDeviceCapabilities(device);
-                System.out.println(abilities.CL_KHR_3d_image_writes);
+                CLDeviceCapabilities abilities = CLCapabilities.getDeviceCapabilities(device);
+                System.out.println("3d_image_writes: " + abilities.CL_KHR_3d_image_writes);
+                System.out.println("gl_sharing: " + abilities.CL_KHR_gl_sharing);
                 return abilities.CL_KHR_gl_sharing;
             };
-
+           
             // List of LJWGL CLDevice objects representing hardware or software contexts that OpenCL can use
-            List<CLDevice> devices = platform.getDevices(CL10.CL_DEVICE_TYPE_GPU);
+            List<CLDevice> devices = platform.getDevices(CL10.CL_DEVICE_TYPE_GPU, glSharingFilter);
             if (devices == null) {
                 deviceType = CL10.CL_DEVICE_TYPE_CPU;
                 devices = platform.getDevices(CL10.CL_DEVICE_TYPE_CPU, glSharingFilter);
@@ -315,7 +317,8 @@ public class Main {
                     throw new RuntimeException("No OpenCL devices found with KHR_gl_sharing support.");
                 }
             }
-            System.out.println("Devices obtained");
+            System.out.println(devices.size() + " GPU devices found.");
+             
 
             slices = min(devices.size(), MAX_GPUS);
             System.out.println("Slices: " + slices);
@@ -448,7 +451,7 @@ public class Main {
             glFinish();
         }
 
-        System.out.println((Sys.getTime() * 1000) / Sys.getTimerResolution());
+        //System.out.println((Sys.getTime() * 1000) / Sys.getTimerResolution());
         //IF THE GL TEXTURE BUFFERS HAVE NOT BEEN INITIALIZED
         if (!buffersInitialized) {
             initGLTexture();
